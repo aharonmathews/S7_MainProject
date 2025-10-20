@@ -6,3 +6,14 @@ pydantic
 websockets
 asyncio
 requests
+telethon
+cryptg
+google-auth-oauthlib
+google-auth-httplib2
+google-api-python-client
+firebase-admin
+PyJWT
+httpx
+scikit-learn
+numpy
+praw

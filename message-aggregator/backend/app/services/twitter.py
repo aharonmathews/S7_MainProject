@@ -2,7 +2,7 @@ from typing import List, Dict, Any
 import requests
 import os
 
-BEARER_TOKEN = os.getenv("TWITTER_BEARER_TOKEN", "AAAAAAAAAAAAAAAAAAAAAAGi4wEAAAAAThePt91DR5k%2F3iOkGts620AlYow%3DzZNdlMxOKzHjFKGP088EQ5VXQYRHSMG70o2b4qJdkZWxmCuDQu")
+BEARER_TOKEN = os.getenv("TWITTER_BEARER_TOKEN")
 
 def create_headers(token):
     return {"Authorization": f"Bearer {token}"}

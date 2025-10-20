@@ -5,6 +5,7 @@ const API_BASE_URL = "http://localhost:8000";
 export const fetchMessages = async (
   platforms: string[],
   twitterKeyword: string = "python",
+  token: string,
   limit: number = 20
 ) => {
   const response = await axios.get(`${API_BASE_URL}/messages`, {
@@ -12,6 +13,9 @@ export const fetchMessages = async (
       platforms: platforms.join(","),
       twitter_keyword: twitterKeyword,
       limit,
+    },
+    headers: {
+      Authorization: `Bearer ${token}`,
     },
   });
   return response.data.messages;
