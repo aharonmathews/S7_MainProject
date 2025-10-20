@@ -51,7 +51,7 @@ class TelegramService:
                             "id": f"telegram_{message.id}_{dialog.id}",
                             "platform": "telegram",
                             "title": f"Message from {sender_name}",
-                            "content": message.text,  # ✅ Full message content
+                            "content": message.text,
                             "sender": sender_name,
                             "chat": dialog.name,
                             "timestamp": message.date.isoformat(),
@@ -90,19 +90,15 @@ async def fetch_telegram_messages_async(limit: int = 20) -> List[Dict[str, Any]]
         return []
 
 def fetch_telegram_messages(limit: int = 20) -> List[Dict[str, Any]]:
-    """Synchronous wrapper - tries to use existing event loop"""
+    """Synchronous wrapper for thread pool execution"""
     try:
-        # Try to get the running event loop
-        loop = asyncio.get_event_loop()
-        if loop.is_running():
-            # If loop is running, schedule the coroutine
-            import concurrent.futures
-            with concurrent.futures.ThreadPoolExecutor() as pool:
-                future = pool.submit(asyncio.run, fetch_telegram_messages_async(limit))
-                return future.result()
-        else:
-            # If no loop is running, use asyncio.run
-            return asyncio.run(fetch_telegram_messages_async(limit))
+        # ✅ FIX: Create a new event loop for this thread
+        loop = asyncio.new_event_loop()
+        asyncio.set_event_loop(loop)
+        try:
+            return loop.run_until_complete(fetch_telegram_messages_async(limit))
+        finally:
+            loop.close()
     except Exception as e:
         print(f"❌ Error in fetch_telegram_messages: {e}")
         import traceback
