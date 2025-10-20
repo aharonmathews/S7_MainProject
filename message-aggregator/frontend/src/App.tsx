@@ -17,6 +17,7 @@ import Calendar from "./components/Calendar";
 import { fetchMessages } from "./services/api";
 import { Message } from "./types";
 import axios from "axios";
+import SavedMessages from "./components/SavedMessages"; // ✅ Add this
 
 const MainApp: React.FC = () => {
   const [messagesData, setMessagesData] = useState<any>({
@@ -201,6 +202,15 @@ const MainApp: React.FC = () => {
               📅 Calendar
             </a>
           </li>
+          {/* ✅ Add Saved Messages Link */}
+          <li style={{ marginBottom: "10px" }}>
+            <a
+              href="/saved"
+              style={{ textDecoration: "none", color: "#007bff" }}
+            >
+              💾 Saved Messages
+            </a>
+          </li>
           <li style={{ marginBottom: "10px" }}>
             <a
               href="/dashboard"
@@ -378,6 +388,8 @@ const MainApp: React.FC = () => {
         <Routes>
           <Route path="/" element={<MessageList messages={messagesData} />} />
           <Route path="/calendar" element={<Calendar />} />
+          <Route path="/saved" element={<SavedMessages />} />{" "}
+          {/* ✅ Add this */}
           <Route path="/dashboard" element={<Dashboard />} />
         </Routes>
       </main>

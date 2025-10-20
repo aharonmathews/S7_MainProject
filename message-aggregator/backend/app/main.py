@@ -9,7 +9,7 @@ from app.services.gmail import get_oauth_flow, GmailService, CLIENT_ID, CLIENT_S
 from app.services.discord_service import get_discord_service
 from app.services.date_extractor import date_extractor  # ✅ Add this
 from google.oauth2.credentials import Credentials
-from app.routes import user, calendar
+from app.routes import user, calendar, saved_messages
 import os
 import json
 
@@ -29,6 +29,8 @@ app.add_middleware(
 # Include routers
 app.include_router(user.router)
 app.include_router(calendar.router)
+app.include_router(saved_messages.router)  # ✅ Add this
+
 
 # Initialize aggregator
 aggregator = MessageAggregator()

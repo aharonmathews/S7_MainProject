@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from "react";
 import axios from "axios";
 import { useAuth } from "../contexts/AuthContext";
+import { savedMessagesApi } from "../services/savedMessagesApi";
 
 interface Message {
   id: string;
@@ -37,10 +38,13 @@ const MessageModal: React.FC<MessageModalProps> = ({ message, onClose }) => {
   const [extractedEvents, setExtractedEvents] = useState<ExtractedEvent[]>([]);
   const [loadingDates, setLoadingDates] = useState(true);
   const [savingEvent, setSavingEvent] = useState<number | null>(null);
-  const { user, getToken } = useAuth(); // ✅ Add getToken
+  const [isSaved, setIsSaved] = useState(false); // ✅ Add this
+  const [savingMessage, setSavingMessage] = useState(false); // ✅ Add this
+  const { user, getToken } = useAuth();
 
   useEffect(() => {
     extractDatesFromMessage();
+    checkIfMessageSaved();
   }, [message]);
 
   const extractDatesFromMessage = async () => {
@@ -60,7 +64,61 @@ const MessageModal: React.FC<MessageModalProps> = ({ message, onClose }) => {
     }
   };
 
-  // ...existing code...
+  const checkIfMessageSaved = async () => {
+    try {
+      const token = await getToken();
+      if (!token) return;
+
+      const saved = await savedMessagesApi.checkIfSaved(token, message.id);
+      setIsSaved(saved);
+    } catch (error) {
+      console.error("Error checking if message is saved:", error);
+    }
+  };
+
+  const handleSaveMessage = async () => {
+    if (!user) {
+      alert("Please log in to save messages");
+      return;
+    }
+
+    setSavingMessage(true);
+    try {
+      const token = await getToken();
+      if (!token) {
+        alert("Authentication required");
+        setSavingMessage(false);
+        return;
+      }
+
+      if (isSaved) {
+        // Message is already saved, so we need to unsave it
+        const savedMessages = await savedMessagesApi.getSavedMessages(token);
+        const savedMsg = savedMessages.find(
+          (m: any) => m.message_id === message.id
+        );
+
+        if (savedMsg) {
+          await savedMessagesApi.deleteSavedMessage(token, savedMsg.id);
+          setIsSaved(false);
+          alert("✅ Message removed from saved!");
+        }
+      } else {
+        await savedMessagesApi.saveMessage(token, message);
+        setIsSaved(true);
+        alert("✅ Message saved successfully!");
+      }
+    } catch (error: any) {
+      console.error("Error saving message:", error);
+      alert(
+        `Failed to save message: ${
+          error.response?.data?.detail || error.message
+        }`
+      );
+    } finally {
+      setSavingMessage(false);
+    }
+  };
 
   const handleAddToCalendar = async (event: ExtractedEvent, index: number) => {
     if (!user) {
@@ -76,7 +134,6 @@ const MessageModal: React.FC<MessageModalProps> = ({ message, onClose }) => {
     setSavingEvent(index);
 
     try {
-      // ✅ Get the authentication token
       const token = await getToken();
       if (!token) {
         alert("Authentication required");
@@ -84,7 +141,6 @@ const MessageModal: React.FC<MessageModalProps> = ({ message, onClose }) => {
         return;
       }
 
-      // Create event from message
       const eventData = {
         title: message.title || "Event from message",
         description: event.context || message.content.substring(0, 200),
@@ -95,11 +151,11 @@ const MessageModal: React.FC<MessageModalProps> = ({ message, onClose }) => {
       };
 
       const response = await axios.post(
-        `http://localhost:8000/api/calendar/events`, // ✅ No query params
+        `http://localhost:8000/api/calendar/events`,
         eventData,
         {
           headers: {
-            Authorization: `Bearer ${token}`, // ✅ Send Bearer token
+            Authorization: `Bearer ${token}`,
           },
         }
       );
@@ -174,20 +230,39 @@ const MessageModal: React.FC<MessageModalProps> = ({ message, onClose }) => {
               {message.title}
             </h2>
           </div>
-          <button
-            onClick={onClose}
-            style={{
-              background: "none",
-              border: "none",
-              fontSize: "28px",
-              cursor: "pointer",
-              color: "#666",
-              padding: "0",
-              marginLeft: "15px",
-            }}
-          >
-            ×
-          </button>
+
+          {/* Save Button */}
+          <div style={{ display: "flex", gap: "10px", alignItems: "center" }}>
+            <button
+              onClick={handleSaveMessage}
+              disabled={savingMessage}
+              style={{
+                padding: "8px 16px",
+                backgroundColor: isSaved ? "#28a745" : "#6c757d",
+                color: "white",
+                border: "none",
+                borderRadius: "6px",
+                cursor: savingMessage ? "not-allowed" : "pointer",
+                fontSize: "14px",
+                whiteSpace: "nowrap",
+              }}
+            >
+              {savingMessage ? "⏳" : isSaved ? "✅ Saved" : "💾 Save"}
+            </button>
+            <button
+              onClick={onClose}
+              style={{
+                background: "none",
+                border: "none",
+                fontSize: "28px",
+                cursor: "pointer",
+                color: "#666",
+                padding: "0",
+              }}
+            >
+              ×
+            </button>
+          </div>
         </div>
 
         {/* Message Details */}
@@ -211,7 +286,6 @@ const MessageModal: React.FC<MessageModalProps> = ({ message, onClose }) => {
             </p>
           </div>
 
-          {/* AI Curation Scores */}
           {message.ai_scores && (
             <div style={{ marginBottom: "10px" }}>
               <strong>🤖 AI CURATION SCORES</strong>
