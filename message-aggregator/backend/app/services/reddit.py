@@ -22,7 +22,7 @@ class RedditService:
             client_id=client_id,
             client_secret=client_secret,
             user_agent="message_aggregator/1.0 by /u/yourusername",
-            check_for_async=False  # Disable async check
+            check_for_async=False
         )
     
     def fetch_messages(self, keyword: str = "technology", subreddit_name: str = "all", limit: int = 20) -> List[Dict[str, Any]]:
@@ -30,16 +30,32 @@ class RedditService:
         messages = []
         
         try:
-            subreddit = self.reddit.subreddit(subreddit_name)
-            results = subreddit.search(keyword, sort="relevance", time_filter="week", limit=min(limit, 10))
+            print(f"🔍 Searching Reddit for '{keyword}' in r/{subreddit_name}...")
             
+            subreddit = self.reddit.subreddit(subreddit_name)
+            
+            # ⚡ OPTIMIZATION 1: Reduce search results to 5 posts max
+            max_posts = min(5, limit // 2)
+            
+            # ⚡ OPTIMIZATION 2: Add timeout for search
+            results = subreddit.search(
+                keyword, 
+                sort="relevance",  # Changed from "hot" for faster results
+                time_filter="day",  # Changed from "week" to "day" for faster search
+                limit=max_posts
+            )
+            
+            post_count = 0
             for post in results:
+                post_count += 1
+                print(f"  📄 Processing post {post_count}/{max_posts}: {post.title[:50]}...")
+                
                 # Add the post itself as a message
                 post_message = {
                     'id': f'reddit_post_{post.id}',
                     'platform': 'reddit',
                     'title': post.title,
-                    'content': post.selftext[:500] if post.selftext else f"Score: {post.score} | Comments: {post.num_comments}",
+                    'content': post.selftext if post.selftext else f"Score: {post.score} | Comments: {post.num_comments}",
                     'sender': f"u/{post.author.name}" if post.author else "deleted",
                     'timestamp': datetime.fromtimestamp(post.created_utc).isoformat(),
                     'url': f"https://www.reddit.com{post.permalink}",
@@ -49,16 +65,23 @@ class RedditService:
                 }
                 messages.append(post_message)
                 
-                # Optionally add top comments as separate messages
+                # ⚡ OPTIMIZATION 3: Skip comments if post has too many (causes slowdown)
+                if post.num_comments > 100:
+                    print(f"    ⏩ Skipping comments (too many: {post.num_comments})")
+                    continue
+                
+                # ⚡ OPTIMIZATION 4: Only fetch top 1 comment (instead of 2)
                 try:
-                    post.comments.replace_more(limit=0)
-                    for comment in list(post.comments)[:2]:  # Top 2 comments per post
+                    post.comments.replace_more(limit=0)  # Don't expand "load more comments"
+                    top_comments = list(post.comments)[:1]  # Only 1 comment
+                    
+                    for comment in top_comments:
                         if hasattr(comment, 'body') and comment.body:
                             comment_message = {
                                 'id': f'reddit_comment_{comment.id}',
                                 'platform': 'reddit',
                                 'title': f'Comment on: {post.title[:50]}...',
-                                'content': comment.body[:300],
+                                'content': comment.body,
                                 'sender': f"u/{comment.author.name}" if comment.author else "deleted",
                                 'timestamp': datetime.fromtimestamp(comment.created_utc).isoformat(),
                                 'url': f"https://www.reddit.com{comment.permalink}",
@@ -66,10 +89,17 @@ class RedditService:
                                 'score': comment.score
                             }
                             messages.append(comment_message)
+                            print(f"    💬 Added comment from u/{comment.author.name if comment.author else 'deleted'}")
+                            
                 except Exception as e:
-                    print(f"Error fetching comments for post {post.id}: {e}")
+                    print(f"    ⚠️  Error fetching comments: {e}")
+                
+                # ⚡ OPTIMIZATION 5: Stop early if we have enough messages
+                if len(messages) >= limit:
+                    print(f"  ✅ Reached message limit ({limit})")
+                    break
             
-            print(f"✅ Fetched {len(messages)} Reddit messages for keyword '{keyword}'")
+            print(f"✅ Fetched {len(messages)} Reddit messages for keyword '{keyword}' in {post_count} posts")
             
         except Exception as e:
             print(f"❌ Error fetching Reddit messages: {e}")

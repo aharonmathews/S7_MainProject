@@ -20,3 +20,7 @@ praw
 slack-sdk
 sentence-transformers
 torch
+beautifulsoup4
+lxml
+dateparser
+discord.py

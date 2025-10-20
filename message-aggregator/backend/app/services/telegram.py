@@ -51,7 +51,7 @@ class TelegramService:
                             "id": f"telegram_{message.id}_{dialog.id}",
                             "platform": "telegram",
                             "title": f"Message from {sender_name}",
-                            "content": message.text[:200],
+                            "content": message.text,  # ✅ Full message content
                             "sender": sender_name,
                             "chat": dialog.name,
                             "timestamp": message.date.isoformat(),

@@ -76,7 +76,7 @@ class SlackService:
                             'id': f'slack_{ch_id}_{msg.get("ts", "")}',
                             'platform': 'slack',
                             'title': f'Message from {ch_name}',
-                            'content': msg.get("text", "")[:500],
+                            'content': msg.get("text", ""),  # ✅ Full message content
                             'sender': self._get_user_name(msg.get("user", "unknown")),
                             'timestamp': datetime.fromtimestamp(float(msg.get("ts", 0))).isoformat(),
                             'chat': ch_name,

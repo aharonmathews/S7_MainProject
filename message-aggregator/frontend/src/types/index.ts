@@ -12,6 +12,8 @@ export interface Message {
   tfidf_score?: number;
   hybrid_score?: number;
   keyword_bonus?: number;
+  score?: number;
+  num_comments?: number;
 }
 
 export interface Platform {

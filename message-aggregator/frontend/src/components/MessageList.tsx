@@ -1,5 +1,6 @@
-import React from "react";
+import React, { useState } from "react";
 import MessageCard from "./MessageCard";
+import MessageModal from "./MessageModal";
 import { Message } from "../types";
 
 interface MessageListProps {
@@ -23,6 +24,8 @@ interface MessageListProps {
 }
 
 const MessageList: React.FC<MessageListProps> = ({ messages }) => {
+  const [selectedMessage, setSelectedMessage] = useState<Message | null>(null);
+
   if (!messages) {
     return (
       <div style={{ padding: "40px", textAlign: "center", color: "#999" }}>
@@ -48,6 +51,14 @@ const MessageList: React.FC<MessageListProps> = ({ messages }) => {
 
   return (
     <div style={{ padding: "20px", maxWidth: "1200px", margin: "0 auto" }}>
+      {/* Modal */}
+      {selectedMessage && (
+        <MessageModal
+          message={selectedMessage}
+          onClose={() => setSelectedMessage(null)}
+        />
+      )}
+
       {/* Curation Stats Banner */}
       {stats && messages.curation_method === "hybrid" && (
         <div
@@ -147,7 +158,10 @@ const MessageList: React.FC<MessageListProps> = ({ messages }) => {
                   backgroundColor: "white",
                 }}
               >
-                <MessageCard message={message} />
+                <MessageCard
+                  message={message}
+                  onClick={() => setSelectedMessage(message)}
+                />
                 <div
                   style={{
                     padding: "8px 15px",
@@ -194,7 +208,11 @@ const MessageList: React.FC<MessageListProps> = ({ messages }) => {
             style={{ display: "flex", flexDirection: "column", gap: "10px" }}
           >
             {regular.map((message) => (
-              <MessageCard key={message.id} message={message} />
+              <MessageCard
+                key={message.id}
+                message={message}
+                onClick={() => setSelectedMessage(message)}
+              />
             ))}
           </div>
         </div>

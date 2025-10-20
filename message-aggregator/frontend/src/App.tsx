@@ -4,6 +4,8 @@ import {
   Routes,
   Route,
   Navigate,
+  useLocation,
+  useNavigate,
 } from "react-router-dom";
 import { AuthProvider, useAuth } from "./contexts/AuthContext";
 import Login from "./components/Login";
@@ -11,6 +13,7 @@ import Setup from "./components/Setup";
 import Dashboard from "./components/Dashboard";
 import ProtectedRoute from "./components/ProtectedRoute";
 import MessageList from "./components/MessageList";
+import Calendar from "./components/Calendar";
 import { fetchMessages } from "./services/api";
 import { Message } from "./types";
 import axios from "axios";
@@ -31,6 +34,8 @@ const MainApp: React.FC = () => {
   const [redditSubreddit, setRedditSubreddit] = useState("all");
   const [gmailAuthenticated, setGmailAuthenticated] = useState(false);
   const { user, logout, getToken } = useAuth();
+  const location = useLocation();
+  const navigate = useNavigate();
 
   useEffect(() => {
     if (user) {
@@ -38,11 +43,25 @@ const MainApp: React.FC = () => {
     }
   }, [user]);
 
+  useEffect(() => {
+    // Check for Gmail OAuth callback
+    const params = new URLSearchParams(location.search);
+    if (params.get("gmail") === "success") {
+      console.log("✅ Gmail authentication successful!");
+      setGmailAuthenticated(true);
+      navigate("/", { replace: true });
+    } else if (params.get("gmail") === "error") {
+      console.error("❌ Gmail authentication failed");
+      alert("Gmail authentication failed. Please try again.");
+      navigate("/", { replace: true });
+    }
+  }, [location, navigate]);
+
   const checkGmailAuth = async () => {
     try {
       const token = await getToken();
       const response = await axios.get(
-        "http://localhost:8000/auth/gmail/status",
+        `http://localhost:8000/auth/gmail/status?user_id=${user?.uid}`,
         {
           headers: { Authorization: `Bearer ${token}` },
         }
@@ -55,13 +74,24 @@ const MainApp: React.FC = () => {
 
   const handleGmailAuth = async () => {
     try {
+      if (!user) {
+        alert("Please log in first");
+        return;
+      }
+
       const token = await getToken();
-      const response = await axios.get("http://localhost:8000/auth/gmail", {
-        headers: { Authorization: `Bearer ${token}` },
-      });
+      const response = await axios.get(
+        `http://localhost:8000/auth/gmail?user_id=${user.uid}`,
+        {
+          headers: { Authorization: `Bearer ${token}` },
+        }
+      );
+
+      console.log("🔐 Redirecting to Gmail OAuth...");
       window.location.href = response.data.auth_url;
     } catch (error) {
       console.error("Error initiating Gmail auth:", error);
+      alert("Failed to initiate Gmail authentication");
     }
   };
 
@@ -83,6 +113,7 @@ const MainApp: React.FC = () => {
           reddit_subreddit: redditSubreddit,
           limit: 20,
           filter_by_preferences: true,
+          user_id: user?.uid,
         },
         headers: {
           Authorization: `Bearer ${token}`,
@@ -164,6 +195,14 @@ const MainApp: React.FC = () => {
           </li>
           <li style={{ marginBottom: "10px" }}>
             <a
+              href="/calendar"
+              style={{ textDecoration: "none", color: "#007bff" }}
+            >
+              📅 Calendar
+            </a>
+          </li>
+          <li style={{ marginBottom: "10px" }}>
+            <a
               href="/dashboard"
               style={{ textDecoration: "none", color: "#007bff" }}
             >
@@ -206,13 +245,28 @@ const MainApp: React.FC = () => {
                 onClick={handleGmailAuth}
                 style={{
                   marginLeft: "10px",
-                  padding: "2px 8px",
+                  padding: "4px 12px",
                   fontSize: "11px",
                   cursor: "pointer",
+                  backgroundColor: "#007bff",
+                  color: "white",
+                  border: "none",
+                  borderRadius: "4px",
                 }}
               >
                 Connect
               </button>
+            )}
+            {gmailAuthenticated && (
+              <span
+                style={{
+                  marginLeft: "10px",
+                  fontSize: "11px",
+                  color: "green",
+                }}
+              >
+                ✓ Connected
+              </span>
             )}
           </label>
 
@@ -232,6 +286,15 @@ const MainApp: React.FC = () => {
               onChange={() => handlePlatformToggle("slack")}
             />
             {" Slack"}
+          </label>
+
+          <label style={{ display: "block", marginBottom: "10px" }}>
+            <input
+              type="checkbox"
+              checked={selectedPlatforms.includes("discord")}
+              onChange={() => handlePlatformToggle("discord")}
+            />
+            {" Discord"}
           </label>
         </div>
 
@@ -314,6 +377,7 @@ const MainApp: React.FC = () => {
       <main style={{ flex: 1, overflow: "auto", backgroundColor: "#ffffff" }}>
         <Routes>
           <Route path="/" element={<MessageList messages={messagesData} />} />
+          <Route path="/calendar" element={<Calendar />} />
           <Route path="/dashboard" element={<Dashboard />} />
         </Routes>
       </main>
