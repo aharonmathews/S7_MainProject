@@ -17,3 +17,6 @@ httpx
 scikit-learn
 numpy
 praw
+slack-sdk
+sentence-transformers
+torch

@@ -3,15 +3,26 @@ import praw
 import os
 from dotenv import load_dotenv
 from datetime import datetime
+import warnings
+
+# Suppress the async warning
+warnings.filterwarnings('ignore', message='.*PRAW.*asynchronous.*')
 
 load_dotenv()
 
 class RedditService:
     def __init__(self):
+        client_id = os.getenv("REDDIT_CLIENT_ID")
+        client_secret = os.getenv("REDDIT_CLIENT_SECRET")
+        
+        if not client_id or not client_secret:
+            raise Exception("Reddit credentials not set in .env file")
+            
         self.reddit = praw.Reddit(
-            client_id=os.getenv("REDDIT_CLIENT_ID"),
-            client_secret=os.getenv("REDDIT_CLIENT_SECRET"),
-            user_agent="message_aggregator/1.0"
+            client_id=client_id,
+            client_secret=client_secret,
+            user_agent="message_aggregator/1.0 by /u/yourusername",
+            check_for_async=False  # Disable async check
         )
     
     def fetch_messages(self, keyword: str = "technology", subreddit_name: str = "all", limit: int = 20) -> List[Dict[str, Any]]:
@@ -20,7 +31,7 @@ class RedditService:
         
         try:
             subreddit = self.reddit.subreddit(subreddit_name)
-            results = subreddit.search(keyword, sort="relevance", time_filter="week", limit=limit)
+            results = subreddit.search(keyword, sort="relevance", time_filter="week", limit=min(limit, 10))
             
             for post in results:
                 # Add the post itself as a message
@@ -41,7 +52,7 @@ class RedditService:
                 # Optionally add top comments as separate messages
                 try:
                     post.comments.replace_more(limit=0)
-                    for comment in post.comments[:3]:  # Top 3 comments per post
+                    for comment in list(post.comments)[:2]:  # Top 2 comments per post
                         if hasattr(comment, 'body') and comment.body:
                             comment_message = {
                                 'id': f'reddit_comment_{comment.id}',
@@ -62,10 +73,17 @@ class RedditService:
             
         except Exception as e:
             print(f"❌ Error fetching Reddit messages: {e}")
+            if "401" in str(e):
+                print("⚠️  Reddit API authentication failed. Check your credentials.")
+                print("👉 Make sure REDDIT_CLIENT_ID and REDDIT_CLIENT_SECRET are correct")
         
         return messages
 
 def fetch_reddit_messages(keyword: str = "technology", subreddit: str = "all", limit: int = 20) -> List[Dict[str, Any]]:
     """Standalone function to fetch Reddit messages"""
-    service = RedditService()
-    return service.fetch_messages(keyword, subreddit, limit)
+    try:
+        service = RedditService()
+        return service.fetch_messages(keyword, subreddit, limit)
+    except Exception as e:
+        print(f"❌ Reddit service error: {e}")
+        return []

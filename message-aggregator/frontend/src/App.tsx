@@ -224,6 +224,15 @@ const MainApp: React.FC = () => {
             />
             {" Reddit"}
           </label>
+
+          <label style={{ display: "block", marginBottom: "10px" }}>
+            <input
+              type="checkbox"
+              checked={selectedPlatforms.includes("slack")}
+              onChange={() => handlePlatformToggle("slack")}
+            />
+            {" Slack"}
+          </label>
         </div>
 
         {selectedPlatforms.includes("twitter") && (

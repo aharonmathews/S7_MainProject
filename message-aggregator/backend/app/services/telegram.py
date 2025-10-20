@@ -3,16 +3,31 @@ from telethon import TelegramClient
 import asyncio
 import os
 from datetime import datetime
+from dotenv import load_dotenv
 
+# Force load environment variables
+load_dotenv(override=True)
+
+# Load credentials
 API_ID = os.getenv('TELEGRAM_API_ID')
 API_HASH = os.getenv('TELEGRAM_API_HASH')
 PHONE = os.getenv('TELEGRAM_PHONE')
 
+# Debug print (remove in production)
+print(f"🔍 Telegram Config Check:")
+print(f"   API_ID: {API_ID}")
+print(f"   API_HASH: {API_HASH[:10] if API_HASH else None}...")
+print(f"   PHONE: {PHONE}")
+
 class TelegramService:
     def __init__(self):
+        # Validate credentials
+        if not API_ID or not API_HASH:
+            raise Exception("Telegram API_ID or API_HASH not set in .env file")
+            
         # Use absolute path for session file
         session_path = os.path.join(os.path.dirname(__file__), '..', '..', 'session_name')
-        self.client = TelegramClient(session_path, API_ID, API_HASH)
+        self.client = TelegramClient(session_path, int(API_ID), API_HASH)
         
     async def fetch_messages_async(self, limit: int = 20) -> List[Dict[str, Any]]:
         messages = []
@@ -49,10 +64,10 @@ class TelegramService:
                 if dialog_count >= 5:
                     break
             
-            print(f"Total messages fetched: {len(messages)}")
+            print(f"✅ Total Telegram messages fetched: {len(messages)}")
             
         except Exception as e:
-            print(f"Error in fetch_messages_async: {e}")
+            print(f"❌ Error in fetch_messages_async: {e}")
             import traceback
             traceback.print_exc()
         finally:
@@ -62,14 +77,14 @@ class TelegramService:
 
 async def fetch_telegram_messages_async(limit: int = 20) -> List[Dict[str, Any]]:
     print(f"fetch_telegram_messages_async called with limit={limit}")
-    service = TelegramService()
     
     try:
+        service = TelegramService()
         messages = await service.fetch_messages_async(limit)
         print(f"Returning {len(messages)} messages")
         return messages
     except Exception as e:
-        print(f"Error in fetch_telegram_messages_async: {e}")
+        print(f"❌ Error in fetch_telegram_messages_async: {e}")
         import traceback
         traceback.print_exc()
         return []
@@ -89,7 +104,7 @@ def fetch_telegram_messages(limit: int = 20) -> List[Dict[str, Any]]:
             # If no loop is running, use asyncio.run
             return asyncio.run(fetch_telegram_messages_async(limit))
     except Exception as e:
-        print(f"Error in fetch_telegram_messages: {e}")
+        print(f"❌ Error in fetch_telegram_messages: {e}")
         import traceback
         traceback.print_exc()
         return []

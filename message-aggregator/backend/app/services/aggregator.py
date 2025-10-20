@@ -4,7 +4,8 @@ from .telegram import fetch_telegram_messages_async
 from .twitter import fetch_twitter_messages
 from .gmail import fetch_gmail_messages
 from .reddit import fetch_reddit_messages
-from .message_filter import message_filter
+from .slack import fetch_slack_messages
+from .curation.hybrid_curator import hybrid_curator
 
 class MessageAggregator:
     async def aggregate_messages_async(
@@ -37,26 +38,33 @@ class MessageAggregator:
                     messages = fetch_reddit_messages(reddit_keyword, reddit_subreddit, limit)
                     aggregated_messages.extend(messages)
                     
+                elif platform == "slack":
+                    messages = fetch_slack_messages(limit)
+                    aggregated_messages.extend(messages)
+                    
             except Exception as e:
                 print(f"❌ Error fetching {platform}: {e}")
         
         # Sort by timestamp (newest first)
         aggregated_messages.sort(key=lambda x: x.get('timestamp', ''), reverse=True)
         
-        # Filter by preferences if enabled
+        # Use Hybrid Curation if preferences are set
         if filter_by_preferences and user_preferences:
-            filtered = message_filter.filter_important_messages(
+            result = hybrid_curator.curate_messages(
                 aggregated_messages,
                 user_preferences,
-                threshold=0.15,
+                threshold=0.25,  # Lower threshold for semantic matching
                 top_k=30
             )
+            
             return {
-                'important': filtered['important'],
-                'regular': filtered['regular'],
+                'important': result['important'],
+                'regular': result['regular'],
                 'total_count': len(aggregated_messages),
-                'important_count': len(filtered['important']),
-                'preferences_used': user_preferences
+                'important_count': len(result['important']),
+                'preferences_used': user_preferences,
+                'curation_method': 'hybrid',
+                'curation_stats': result['curation_stats']
             }
         else:
             return {
@@ -64,7 +72,8 @@ class MessageAggregator:
                 'regular': aggregated_messages,
                 'total_count': len(aggregated_messages),
                 'important_count': 0,
-                'preferences_used': []
+                'preferences_used': [],
+                'curation_method': 'none'
             }
     
     def aggregate_messages(
