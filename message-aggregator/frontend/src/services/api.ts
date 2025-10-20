@@ -13,12 +13,15 @@ export const fetchMessages = async (
       platforms: platforms.join(","),
       twitter_keyword: twitterKeyword,
       limit,
+      filter_by_preferences: true,
     },
     headers: {
       Authorization: `Bearer ${token}`,
     },
   });
-  return response.data.messages;
+
+  // Return the data directly - it should have important/regular/total_count structure
+  return response.data;
 };
 
 export const fetchPlatforms = async (): Promise<any> => {

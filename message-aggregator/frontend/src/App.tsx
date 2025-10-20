@@ -16,11 +16,19 @@ import { Message } from "./types";
 import axios from "axios";
 
 const MainApp: React.FC = () => {
-  const [messages, setMessages] = useState<Message[]>([]);
+  const [messagesData, setMessagesData] = useState<any>({
+    important: [],
+    regular: [],
+    total_count: 0,
+    important_count: 0,
+    preferences_used: [],
+  });
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [selectedPlatforms, setSelectedPlatforms] = useState<string[]>([]);
   const [twitterKeyword, setTwitterKeyword] = useState("python");
+  const [redditKeyword, setRedditKeyword] = useState("technology");
+  const [redditSubreddit, setRedditSubreddit] = useState("all");
   const [gmailAuthenticated, setGmailAuthenticated] = useState(false);
   const { user, logout, getToken } = useAuth();
 
@@ -67,12 +75,21 @@ const MainApp: React.FC = () => {
     setError(null);
     try {
       const token = await getToken();
-      const data = await fetchMessages(
-        selectedPlatforms,
-        twitterKeyword,
-        token || ""
-      );
-      setMessages(data);
+      const response = await axios.get("http://localhost:8000/messages", {
+        params: {
+          platforms: selectedPlatforms.join(","),
+          twitter_keyword: twitterKeyword,
+          reddit_keyword: redditKeyword,
+          reddit_subreddit: redditSubreddit,
+          limit: 20,
+          filter_by_preferences: true,
+        },
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+      });
+      console.log("Received data:", response.data);
+      setMessagesData(response.data);
     } catch (error: any) {
       console.error("Error fetching messages:", error);
       setError(error.message || "Failed to fetch messages");
@@ -92,36 +109,67 @@ const MainApp: React.FC = () => {
     <div style={{ display: "flex", height: "100vh" }}>
       <div
         style={{
-          width: "280px",
+          width: "300px",
           padding: "20px",
           borderRight: "1px solid #ccc",
           overflowY: "auto",
+          backgroundColor: "#f8f9fa",
         }}
       >
         <h2>Message Aggregator</h2>
-        <div style={{ marginBottom: "20px" }}>
-          <small>{user?.email}</small>
+        <div
+          style={{
+            marginBottom: "20px",
+            padding: "10px",
+            backgroundColor: "white",
+            borderRadius: "8px",
+          }}
+        >
+          <small
+            style={{ display: "block", marginBottom: "5px", color: "#666" }}
+          >
+            Logged in as:
+          </small>
+          <small
+            style={{
+              display: "block",
+              fontWeight: "bold",
+              marginBottom: "10px",
+            }}
+          >
+            {user?.email}
+          </small>
           <button
             onClick={() => logout()}
             style={{
-              display: "block",
-              marginTop: "5px",
-              padding: "5px 10px",
+              width: "100%",
+              padding: "8px",
               fontSize: "12px",
+              backgroundColor: "#dc3545",
+              color: "white",
+              border: "none",
+              borderRadius: "4px",
+              cursor: "pointer",
             }}
           >
             Logout
           </button>
         </div>
 
-        <ul style={{ listStyle: "none", padding: 0 }}>
-          <li>
-            <a href="/">Messages</a>
+        <ul style={{ listStyle: "none", padding: 0, marginBottom: "20px" }}>
+          <li style={{ marginBottom: "10px" }}>
+            <a href="/" style={{ textDecoration: "none", color: "#007bff" }}>
+              📬 Messages
+            </a>
           </li>
-          <li>
-            <a href="/dashboard">Dashboard</a>
+          <li style={{ marginBottom: "10px" }}>
+            <a
+              href="/dashboard"
+              style={{ textDecoration: "none", color: "#007bff" }}
+            >
+              📊 Dashboard
+            </a>
           </li>
-          <li>Settings</li>
         </ul>
 
         <div style={{ marginTop: "30px" }}>
@@ -143,10 +191,6 @@ const MainApp: React.FC = () => {
               onChange={() => handlePlatformToggle("twitter")}
             />
             {" Twitter (X)"}
-            <span style={{ fontSize: "10px", color: "#999" }}>
-              {" "}
-              (API limits)
-            </span>
           </label>
 
           <label style={{ display: "block", marginBottom: "10px" }}>
@@ -171,15 +215,62 @@ const MainApp: React.FC = () => {
               </button>
             )}
           </label>
+
+          <label style={{ display: "block", marginBottom: "10px" }}>
+            <input
+              type="checkbox"
+              checked={selectedPlatforms.includes("reddit")}
+              onChange={() => handlePlatformToggle("reddit")}
+            />
+            {" Reddit"}
+          </label>
         </div>
 
         {selectedPlatforms.includes("twitter") && (
           <div style={{ marginTop: "20px" }}>
-            <h3>Twitter Keyword:</h3>
+            <h4>Twitter Keyword:</h4>
             <input
               type="text"
               value={twitterKeyword}
               onChange={(e) => setTwitterKeyword(e.target.value)}
+              style={{ width: "100%", padding: "5px" }}
+            />
+          </div>
+        )}
+
+        {selectedPlatforms.includes("reddit") && (
+          <div style={{ marginTop: "20px" }}>
+            <h4>Reddit Settings:</h4>
+            <label
+              style={{
+                display: "block",
+                marginBottom: "5px",
+                fontSize: "12px",
+              }}
+            >
+              Keyword:
+            </label>
+            <input
+              type="text"
+              value={redditKeyword}
+              onChange={(e) => setRedditKeyword(e.target.value)}
+              placeholder="e.g., technology, python"
+              style={{ width: "100%", padding: "5px", marginBottom: "10px" }}
+            />
+            <label
+              style={{
+                display: "block",
+                marginBottom: "5px",
+                fontSize: "12px",
+              }}
+            >
+              Subreddit:
+            </label>
+            <input
+              type="text"
+              value={redditSubreddit}
+              onChange={(e) => setRedditSubreddit(e.target.value)}
+              placeholder="e.g., all, programming"
               style={{ width: "100%", padding: "5px" }}
             />
           </div>
@@ -192,6 +283,12 @@ const MainApp: React.FC = () => {
             padding: "10px 20px",
             cursor: "pointer",
             width: "100%",
+            backgroundColor: selectedPlatforms.length > 0 ? "#007bff" : "#ccc",
+            color: "white",
+            border: "none",
+            borderRadius: "4px",
+            fontSize: "14px",
+            fontWeight: "bold",
           }}
           disabled={loading || selectedPlatforms.length === 0}
         >
@@ -205,9 +302,9 @@ const MainApp: React.FC = () => {
         )}
       </div>
 
-      <main style={{ flex: 1, overflow: "auto" }}>
+      <main style={{ flex: 1, overflow: "auto", backgroundColor: "#ffffff" }}>
         <Routes>
-          <Route path="/" element={<MessageList messages={messages} />} />
+          <Route path="/" element={<MessageList messages={messagesData} />} />
           <Route path="/dashboard" element={<Dashboard />} />
         </Routes>
       </main>
