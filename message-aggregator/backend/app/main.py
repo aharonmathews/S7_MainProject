@@ -248,13 +248,13 @@ async def gmail_callback(
         
         print(f"✅ Gmail credentials saved for user {user_id}")
         
-        return RedirectResponse(url="http://localhost:5173/?gmail=success")
+        return RedirectResponse(url="http://localhost:3000/?gmail=success")
         
     except Exception as e:
         print(f"❌ Error in Gmail OAuth callback: {e}")
         import traceback
         traceback.print_exc()
-        return RedirectResponse(url="http://localhost:5173/?gmail=error")
+        return RedirectResponse(url="http://localhost:3000/?gmail=error")
 
 if __name__ == "__main__":
     import uvicorn

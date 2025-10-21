@@ -7,15 +7,49 @@ interface MessageCardProps {
 }
 
 const MessageCard: React.FC<MessageCardProps> = ({ message, onClick }) => {
-  const getPlatformColor = (platform: string) => {
-    const colors: Record<string, string> = {
-      telegram: "#0088cc",
-      twitter: "#1da1f2",
-      gmail: "#ea4335",
-      reddit: "#ff4500",
-      slack: "#4a154b",
+  const getPlatformConfig = (platform: string) => {
+    const configs: Record<
+      string,
+      { color: string; icon: string; gradient: string }
+    > = {
+      telegram: {
+        color: "bg-blue-500",
+        icon: "📱",
+        gradient: "from-blue-500 to-blue-600",
+      },
+      twitter: {
+        color: "bg-sky-400",
+        icon: "🐦",
+        gradient: "from-sky-400 to-blue-500",
+      },
+      gmail: {
+        color: "bg-red-500",
+        icon: "📧",
+        gradient: "from-red-500 to-pink-500",
+      },
+      reddit: {
+        color: "bg-orange-500",
+        icon: "🔶",
+        gradient: "from-orange-500 to-red-500",
+      },
+      slack: {
+        color: "bg-purple-600",
+        icon: "💬",
+        gradient: "from-purple-600 to-pink-500",
+      },
+      discord: {
+        color: "bg-indigo-500",
+        icon: "🎮",
+        gradient: "from-indigo-500 to-purple-600",
+      },
     };
-    return colors[platform] || "#6c757d";
+    return (
+      configs[platform] || {
+        color: "bg-gray-500",
+        icon: "📬",
+        gradient: "from-gray-500 to-gray-600",
+      }
+    );
   };
 
   const truncateText = (text: string, maxLength: number) => {
@@ -23,85 +57,111 @@ const MessageCard: React.FC<MessageCardProps> = ({ message, onClick }) => {
     return text.substring(0, maxLength) + "...";
   };
 
+  const config = getPlatformConfig(message.platform);
+  const formattedDate = new Date(message.timestamp).toLocaleDateString(
+    "en-US",
+    {
+      month: "short",
+      day: "numeric",
+      hour: "2-digit",
+      minute: "2-digit",
+    }
+  );
+
   return (
-    <div
-      onClick={onClick}
-      style={{
-        padding: "15px",
-        backgroundColor: "white",
-        borderRadius: "8px",
-        border: "1px solid #ddd",
-        cursor: "pointer",
-        transition: "all 0.2s ease",
-        boxShadow: "0 1px 3px rgba(0,0,0,0.1)",
-      }}
-      onMouseEnter={(e) => {
-        e.currentTarget.style.boxShadow = "0 4px 12px rgba(0,0,0,0.15)";
-        e.currentTarget.style.transform = "translateY(-2px)";
-      }}
-      onMouseLeave={(e) => {
-        e.currentTarget.style.boxShadow = "0 1px 3px rgba(0,0,0,0.1)";
-        e.currentTarget.style.transform = "translateY(0)";
-      }}
-    >
+    <div onClick={onClick} className="card card-hover p-5 group">
       {/* Header */}
-      <div
-        style={{
-          display: "flex",
-          justifyContent: "space-between",
-          alignItems: "start",
-          marginBottom: "10px",
-        }}
-      >
-        <div style={{ flex: 1 }}>
-          <h3 style={{ margin: "0 0 5px 0", fontSize: "16px", color: "#333" }}>
+      <div className="flex items-start justify-between mb-3">
+        <div className="flex-1">
+          <h3 className="text-lg font-semibold text-gray-900 dark:text-gray-100 mb-2 group-hover:text-primary-600 dark:group-hover:text-primary-400 transition-colors">
             {message.title}
           </h3>
-          <div
-            style={{
-              display: "flex",
-              gap: "10px",
-              flexWrap: "wrap",
-              fontSize: "12px",
-              color: "#666",
-            }}
-          >
+          <div className="flex flex-wrap gap-2 items-center">
             <span
-              style={{
-                backgroundColor: getPlatformColor(message.platform),
-                color: "white",
-                padding: "2px 8px",
-                borderRadius: "12px",
-                fontWeight: "bold",
-                textTransform: "capitalize",
-              }}
+              className={`inline-flex items-center gap-1 px-3 py-1 rounded-full text-white text-xs font-bold bg-gradient-to-r ${config.gradient}`}
             >
-              {message.platform}
+              <span>{config.icon}</span>
+              <span className="capitalize">{message.platform}</span>
             </span>
-            {message.sender && <span>👤 {message.sender}</span>}
-            {message.chat && <span>💬 {message.chat}</span>}
-            <span>🕐 {new Date(message.timestamp).toLocaleString()}</span>
+            {message.sender && (
+              <span className="text-xs text-gray-600 dark:text-gray-400 flex items-center gap-1">
+                <svg
+                  className="w-4 h-4"
+                  fill="none"
+                  viewBox="0 0 24 24"
+                  stroke="currentColor"
+                >
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    strokeWidth={2}
+                    d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"
+                  />
+                </svg>
+                {message.sender}
+              </span>
+            )}
+            {message.chat && (
+              <span className="text-xs text-gray-600 dark:text-gray-400 flex items-center gap-1">
+                <svg
+                  className="w-4 h-4"
+                  fill="none"
+                  viewBox="0 0 24 24"
+                  stroke="currentColor"
+                >
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    strokeWidth={2}
+                    d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z"
+                  />
+                </svg>
+                {message.chat}
+              </span>
+            )}
           </div>
+        </div>
+        <div className="text-xs text-gray-500 dark:text-gray-400 flex items-center gap-1">
+          <svg
+            className="w-4 h-4"
+            fill="none"
+            viewBox="0 0 24 24"
+            stroke="currentColor"
+          >
+            <path
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              strokeWidth={2}
+              d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"
+            />
+          </svg>
+          {formattedDate}
         </div>
       </div>
 
       {/* Content Preview */}
-      <div style={{ marginTop: "10px" }}>
-        <p style={{ margin: 0, color: "#555", lineHeight: "1.6" }}>
-          {truncateText(message.content, 150)}
-        </p>
-      </div>
+      <p className="text-gray-700 dark:text-gray-300 text-sm leading-relaxed mb-3">
+        {truncateText(message.content, 200)}
+      </p>
 
-      {/* Click hint */}
-      <div
-        style={{
-          marginTop: "8px",
-          fontSize: "12px",
-          color: "#999",
-          fontStyle: "italic",
-        }}
-      >
-        Click to view full details...
+      {/* Footer */}
+      <div className="flex items-center justify-between pt-3 border-t border-gray-200 dark:border-dark-border">
+        <span className="text-xs text-gray-500 dark:text-gray-400 italic">
+          Click to view details
+        </span>
+        <svg
+          className="w-5 h-5 text-primary-500 group-hover:translate-x-1 transition-transform"
+          fill="none"
+          viewBox="0 0 24 24"
+          stroke="currentColor"
+        >
+          <path
+            strokeLinecap="round"
+            strokeLinejoin="round"
+            strokeWidth={2}
+            d="M9 5l7 7-7 7"
+          />
+        </svg>
       </div>
     </div>
   );

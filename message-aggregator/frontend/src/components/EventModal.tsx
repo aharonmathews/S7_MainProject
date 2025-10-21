@@ -34,7 +34,6 @@ const EventModal: React.FC<EventModalProps> = ({
         time: event.time,
       });
     } else {
-      // Default to today's date
       const today = new Date().toISOString().split("T")[0];
       setFormData({
         title: "",
@@ -54,10 +53,8 @@ const EventModal: React.FC<EventModalProps> = ({
       if (!token) return;
 
       if (event) {
-        // Update existing event
         await calendarApi.updateEvent(token, event.id, formData);
       } else {
-        // Create new event
         await calendarApi.createEvent(token, formData);
       }
 
@@ -71,51 +68,46 @@ const EventModal: React.FC<EventModalProps> = ({
     }
   };
 
-  const handleBackdropClick = (e: React.MouseEvent<HTMLDivElement>) => {
-    if (e.target === e.currentTarget) {
-      onClose();
-    }
-  };
-
   return (
     <div
-      onClick={handleBackdropClick}
-      style={{
-        position: "fixed",
-        top: 0,
-        left: 0,
-        right: 0,
-        bottom: 0,
-        backgroundColor: "rgba(0, 0, 0, 0.5)",
-        display: "flex",
-        alignItems: "center",
-        justifyContent: "center",
-        zIndex: 1000,
-      }}
+      className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 animate-fade-in p-4"
+      onClick={onClose}
     >
       <div
-        style={{
-          backgroundColor: "white",
-          borderRadius: "12px",
-          maxWidth: "600px",
-          width: "100%",
-          padding: "30px",
-        }}
+        className="relative w-full max-w-2xl bg-white dark:bg-dark-card rounded-2xl shadow-2xl animate-slide-up"
+        onClick={(e) => e.stopPropagation()}
       >
-        <h2 style={{ marginTop: 0 }}>
-          {event ? "Edit Event" : "Create Event"}
-        </h2>
-
-        <form onSubmit={handleSubmit}>
-          <div style={{ marginBottom: "20px" }}>
-            <label
-              style={{
-                display: "block",
-                marginBottom: "5px",
-                fontWeight: "bold",
-              }}
+        {/* Header */}
+        <div className="flex items-center justify-between p-6 border-b border-gray-200 dark:border-dark-border">
+          <h2 className="text-2xl font-bold text-gray-900 dark:text-gray-100">
+            {event ? "✏️ Edit Event" : "➕ Create Event"}
+          </h2>
+          <button
+            onClick={onClose}
+            className="p-2 rounded-lg hover:bg-gray-100 dark:hover:bg-dark-bg transition-colors"
+          >
+            <svg
+              className="w-6 h-6"
+              fill="none"
+              viewBox="0 0 24 24"
+              stroke="currentColor"
             >
-              Event Title *
+              <path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                strokeWidth={2}
+                d="M6 18L18 6M6 6l12 12"
+              />
+            </svg>
+          </button>
+        </div>
+
+        {/* Form */}
+        <form onSubmit={handleSubmit} className="p-6 space-y-6">
+          {/* Event Title */}
+          <div>
+            <label className="block text-sm font-medium mb-2">
+              Event Title <span className="text-red-500">*</span>
             </label>
             <input
               type="text"
@@ -124,23 +116,14 @@ const EventModal: React.FC<EventModalProps> = ({
                 setFormData({ ...formData, title: e.target.value })
               }
               required
-              style={{
-                width: "100%",
-                padding: "10px",
-                border: "1px solid #ddd",
-                borderRadius: "4px",
-              }}
+              className="input"
+              placeholder="Team meeting, Doctor appointment, etc."
             />
           </div>
 
-          <div style={{ marginBottom: "20px" }}>
-            <label
-              style={{
-                display: "block",
-                marginBottom: "5px",
-                fontWeight: "bold",
-              }}
-            >
+          {/* Description */}
+          <div>
+            <label className="block text-sm font-medium mb-2">
               Description
             </label>
             <textarea
@@ -149,32 +132,16 @@ const EventModal: React.FC<EventModalProps> = ({
                 setFormData({ ...formData, description: e.target.value })
               }
               rows={4}
-              style={{
-                width: "100%",
-                padding: "10px",
-                border: "1px solid #ddd",
-                borderRadius: "4px",
-              }}
+              className="input resize-none"
+              placeholder="Add event details, notes, or reminders..."
             />
           </div>
 
-          <div
-            style={{
-              display: "grid",
-              gridTemplateColumns: "1fr 1fr",
-              gap: "15px",
-              marginBottom: "20px",
-            }}
-          >
+          {/* Date and Time */}
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div>
-              <label
-                style={{
-                  display: "block",
-                  marginBottom: "5px",
-                  fontWeight: "bold",
-                }}
-              >
-                Date *
+              <label className="block text-sm font-medium mb-2">
+                Date <span className="text-red-500">*</span>
               </label>
               <input
                 type="date"
@@ -183,48 +150,52 @@ const EventModal: React.FC<EventModalProps> = ({
                   setFormData({ ...formData, date: e.target.value })
                 }
                 required
-                style={{
-                  width: "100%",
-                  padding: "10px",
-                  border: "1px solid #ddd",
-                  borderRadius: "4px",
-                }}
+                className="input"
               />
             </div>
 
             <div>
-              <label
-                style={{
-                  display: "block",
-                  marginBottom: "5px",
-                  fontWeight: "bold",
-                }}
-              >
-                Time
-              </label>
+              <label className="block text-sm font-medium mb-2">Time</label>
               <input
                 type="time"
                 value={formData.time}
                 onChange={(e) =>
                   setFormData({ ...formData, time: e.target.value })
                 }
-                style={{
-                  width: "100%",
-                  padding: "10px",
-                  border: "1px solid #ddd",
-                  borderRadius: "4px",
-                }}
+                className="input"
               />
             </div>
           </div>
 
-          <div
-            style={{
-              display: "flex",
-              gap: "10px",
-              justifyContent: "flex-end",
-            }}
-          >
+          {/* Event Info */}
+          {event && (
+            <div className="p-4 bg-blue-50 dark:bg-blue-900/20 rounded-lg border border-blue-200 dark:border-blue-800">
+              <div className="flex items-center gap-2 text-sm text-gray-600 dark:text-gray-400">
+                <svg
+                  className="w-4 h-4"
+                  fill="none"
+                  viewBox="0 0 24 24"
+                  stroke="currentColor"
+                >
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    strokeWidth={2}
+                    d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"
+                  />
+                </svg>
+                <span>
+                  Created from{" "}
+                  <span className="font-semibold capitalize">
+                    {event.platform}
+                  </span>
+                </span>
+              </div>
+            </div>
+          )}
+
+          {/* Actions */}
+          <div className="flex items-center justify-between pt-4 border-t border-gray-200 dark:border-dark-border">
             {event && onDelete && (
               <button
                 type="button"
@@ -232,47 +203,48 @@ const EventModal: React.FC<EventModalProps> = ({
                   onDelete(event.id);
                   onClose();
                 }}
-                style={{
-                  padding: "10px 20px",
-                  backgroundColor: "#dc3545",
-                  color: "white",
-                  border: "none",
-                  borderRadius: "4px",
-                  cursor: "pointer",
-                  marginRight: "auto",
-                }}
+                className="px-6 py-3 bg-red-500 hover:bg-red-600 text-white font-semibold rounded-lg transition-colors duration-200"
               >
-                Delete
+                🗑️ Delete Event
               </button>
             )}
-            <button
-              type="button"
-              onClick={onClose}
-              style={{
-                padding: "10px 20px",
-                backgroundColor: "#6c757d",
-                color: "white",
-                border: "none",
-                borderRadius: "4px",
-                cursor: "pointer",
-              }}
-            >
-              Cancel
-            </button>
-            <button
-              type="submit"
-              disabled={saving}
-              style={{
-                padding: "10px 20px",
-                backgroundColor: "#28a745",
-                color: "white",
-                border: "none",
-                borderRadius: "4px",
-                cursor: saving ? "not-allowed" : "pointer",
-              }}
-            >
-              {saving ? "Saving..." : "Save Event"}
-            </button>
+
+            <div className="flex gap-3 ml-auto">
+              <button type="button" onClick={onClose} className="btn-secondary">
+                Cancel
+              </button>
+              <button
+                type="submit"
+                disabled={saving}
+                className={`btn-primary ${
+                  saving ? "opacity-50 cursor-not-allowed" : ""
+                }`}
+              >
+                {saving ? (
+                  <span className="flex items-center gap-2">
+                    <svg className="animate-spin h-5 w-5" viewBox="0 0 24 24">
+                      <circle
+                        className="opacity-25"
+                        cx="12"
+                        cy="12"
+                        r="10"
+                        stroke="currentColor"
+                        strokeWidth="4"
+                        fill="none"
+                      />
+                      <path
+                        className="opacity-75"
+                        fill="currentColor"
+                        d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
+                      />
+                    </svg>
+                    Saving...
+                  </span>
+                ) : (
+                  <span>💾 Save Event</span>
+                )}
+              </button>
+            </div>
           </div>
         </form>
       </div>

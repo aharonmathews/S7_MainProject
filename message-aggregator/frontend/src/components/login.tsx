@@ -7,12 +7,14 @@ const Login: React.FC = () => {
   const [password, setPassword] = useState("");
   const [isSignup, setIsSignup] = useState(false);
   const [error, setError] = useState("");
+  const [loading, setLoading] = useState(false);
   const { signup, login } = useAuth();
   const navigate = useNavigate();
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError("");
+    setLoading(true);
 
     try {
       if (isSignup) {
@@ -24,110 +26,123 @@ const Login: React.FC = () => {
       }
     } catch (err: any) {
       setError(err.message);
+    } finally {
+      setLoading(false);
     }
   };
 
   return (
-    <div
-      style={{
-        display: "flex",
-        justifyContent: "center",
-        alignItems: "center",
-        height: "100vh",
-        backgroundColor: "#f5f5f5",
-      }}
-    >
-      <div
-        style={{
-          backgroundColor: "white",
-          padding: "40px",
-          borderRadius: "8px",
-          boxShadow: "0 2px 10px rgba(0,0,0,0.1)",
-          width: "400px",
-        }}
-      >
-        <h2 style={{ textAlign: "center", marginBottom: "30px" }}>
-          {isSignup ? "Create Account" : "Login"}
-        </h2>
+    <div className="min-h-screen bg-gradient-to-br from-primary-500 via-blue-600 to-purple-600 flex items-center justify-center p-4">
+      {/* Background Decoration */}
+      <div className="absolute inset-0 overflow-hidden">
+        <div className="absolute -top-40 -right-40 w-80 h-80 bg-white/10 rounded-full blur-3xl"></div>
+        <div className="absolute -bottom-40 -left-40 w-80 h-80 bg-white/10 rounded-full blur-3xl"></div>
+      </div>
 
-        <form onSubmit={handleSubmit}>
-          <div style={{ marginBottom: "20px" }}>
-            <label style={{ display: "block", marginBottom: "5px" }}>
-              Email
-            </label>
-            <input
-              type="email"
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-              required
-              style={{
-                width: "100%",
-                padding: "10px",
-                border: "1px solid #ddd",
-                borderRadius: "4px",
-              }}
-            />
+      {/* Login Card */}
+      <div className="relative w-full max-w-md">
+        <div className="card p-8 backdrop-blur-sm bg-white/95 dark:bg-dark-card/95 animate-slide-up">
+          {/* Logo */}
+          <div className="text-center mb-8">
+            <h1 className="text-4xl font-bold bg-gradient-to-r from-primary-500 to-blue-600 bg-clip-text text-transparent mb-2">
+              MessageHub
+            </h1>
+            <p className="text-gray-600 dark:text-gray-400">
+              {isSignup ? "Create your account" : "Welcome back"}
+            </p>
           </div>
 
-          <div style={{ marginBottom: "20px" }}>
-            <label style={{ display: "block", marginBottom: "5px" }}>
-              Password
-            </label>
-            <input
-              type="password"
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              required
-              style={{
-                width: "100%",
-                padding: "10px",
-                border: "1px solid #ddd",
-                borderRadius: "4px",
-              }}
-            />
-          </div>
-
-          {error && (
-            <div
-              style={{ color: "red", marginBottom: "10px", fontSize: "14px" }}
-            >
-              {error}
+          <form onSubmit={handleSubmit} className="space-y-6">
+            {/* Email Input */}
+            <div>
+              <label className="block text-sm font-medium mb-2">Email</label>
+              <input
+                type="email"
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                required
+                className="input"
+                placeholder="you@example.com"
+              />
             </div>
-          )}
 
-          <button
-            type="submit"
-            style={{
-              width: "100%",
-              padding: "12px",
-              backgroundColor: "#007bff",
-              color: "white",
-              border: "none",
-              borderRadius: "4px",
-              cursor: "pointer",
-              fontSize: "16px",
-            }}
-          >
-            {isSignup ? "Sign Up" : "Login"}
-          </button>
-        </form>
+            {/* Password Input */}
+            <div>
+              <label className="block text-sm font-medium mb-2">Password</label>
+              <input
+                type="password"
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                required
+                className="input"
+                placeholder="••••••••"
+                minLength={6}
+              />
+            </div>
 
-        <div style={{ textAlign: "center", marginTop: "20px" }}>
-          <button
-            onClick={() => setIsSignup(!isSignup)}
-            style={{
-              background: "none",
-              border: "none",
-              color: "#007bff",
-              cursor: "pointer",
-              textDecoration: "underline",
-            }}
-          >
-            {isSignup
-              ? "Already have an account? Login"
-              : "Need an account? Sign Up"}
-          </button>
+            {/* Error Message */}
+            {error && (
+              <div className="p-3 bg-red-100 dark:bg-red-900/20 border border-red-300 dark:border-red-800 rounded-lg text-red-700 dark:text-red-400 text-sm animate-fade-in">
+                {error}
+              </div>
+            )}
+
+            {/* Submit Button */}
+            <button
+              type="submit"
+              disabled={loading}
+              className={`w-full btn-primary ${
+                loading ? "opacity-50 cursor-not-allowed" : ""
+              }`}
+            >
+              {loading ? (
+                <span className="flex items-center justify-center gap-2">
+                  <svg className="animate-spin h-5 w-5" viewBox="0 0 24 24">
+                    <circle
+                      className="opacity-25"
+                      cx="12"
+                      cy="12"
+                      r="10"
+                      stroke="currentColor"
+                      strokeWidth="4"
+                      fill="none"
+                    />
+                    <path
+                      className="opacity-75"
+                      fill="currentColor"
+                      d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
+                    />
+                  </svg>
+                  {isSignup ? "Creating Account..." : "Logging In..."}
+                </span>
+              ) : isSignup ? (
+                "Create Account"
+              ) : (
+                "Log In"
+              )}
+            </button>
+          </form>
+
+          {/* Toggle Auth Mode */}
+          <div className="mt-6 text-center">
+            <button
+              onClick={() => {
+                setIsSignup(!isSignup);
+                setError("");
+              }}
+              className="text-primary-600 dark:text-primary-400 hover:underline text-sm font-medium"
+            >
+              {isSignup
+                ? "Already have an account? Log in"
+                : "Don't have an account? Sign up"}
+            </button>
+          </div>
         </div>
+
+        {/* Footer */}
+        <p className="text-center text-white/80 text-sm mt-4">
+          Secure authentication powered by Firebase 🔒
+        </p>
       </div>
     </div>
   );

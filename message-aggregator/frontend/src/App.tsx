@@ -3,21 +3,20 @@ import {
   BrowserRouter as Router,
   Routes,
   Route,
-  Navigate,
   useLocation,
   useNavigate,
 } from "react-router-dom";
 import { AuthProvider, useAuth } from "./contexts/AuthContext";
+import { ThemeProvider } from "./contexts/ThemeContext";
 import Login from "./components/Login";
 import Setup from "./components/Setup";
 import Dashboard from "./components/Dashboard";
 import ProtectedRoute from "./components/ProtectedRoute";
 import MessageList from "./components/MessageList";
 import Calendar from "./components/Calendar";
-import { fetchMessages } from "./services/api";
-import { Message } from "./types";
+import SavedMessages from "./components/SavedMessages";
+import ThemeToggle from "./components/ThemeToggle";
 import axios from "axios";
-import SavedMessages from "./components/SavedMessages"; // ✅ Add this
 
 const MainApp: React.FC = () => {
   const [messagesData, setMessagesData] = useState<any>({
@@ -34,26 +33,58 @@ const MainApp: React.FC = () => {
   const [redditKeyword, setRedditKeyword] = useState("technology");
   const [redditSubreddit, setRedditSubreddit] = useState("all");
   const [gmailAuthenticated, setGmailAuthenticated] = useState(false);
+  const [sidebarOpen, setSidebarOpen] = useState(true);
   const { user, logout, getToken } = useAuth();
   const location = useLocation();
   const navigate = useNavigate();
 
+  const platforms = [
+    {
+      id: "telegram",
+      name: "Telegram",
+      icon: "📱",
+      color: "from-blue-500 to-blue-600",
+    },
+    {
+      id: "twitter",
+      name: "Twitter",
+      icon: "🐦",
+      color: "from-sky-400 to-blue-500",
+    },
+    {
+      id: "gmail",
+      name: "Gmail",
+      icon: "📧",
+      color: "from-red-500 to-pink-500",
+    },
+    {
+      id: "reddit",
+      name: "Reddit",
+      icon: "🔶",
+      color: "from-orange-500 to-red-500",
+    },
+    {
+      id: "slack",
+      name: "Slack",
+      icon: "💬",
+      color: "from-purple-600 to-pink-500",
+    },
+    {
+      id: "discord",
+      name: "Discord",
+      icon: "🎮",
+      color: "from-indigo-500 to-purple-600",
+    },
+  ];
+
   useEffect(() => {
-    if (user) {
-      checkGmailAuth();
-    }
+    if (user) checkGmailAuth();
   }, [user]);
 
   useEffect(() => {
-    // Check for Gmail OAuth callback
     const params = new URLSearchParams(location.search);
     if (params.get("gmail") === "success") {
-      console.log("✅ Gmail authentication successful!");
       setGmailAuthenticated(true);
-      navigate("/", { replace: true });
-    } else if (params.get("gmail") === "error") {
-      console.error("❌ Gmail authentication failed");
-      alert("Gmail authentication failed. Please try again.");
       navigate("/", { replace: true });
     }
   }, [location, navigate]);
@@ -63,9 +94,7 @@ const MainApp: React.FC = () => {
       const token = await getToken();
       const response = await axios.get(
         `http://localhost:8000/auth/gmail/status?user_id=${user?.uid}`,
-        {
-          headers: { Authorization: `Bearer ${token}` },
-        }
+        { headers: { Authorization: `Bearer ${token}` } }
       );
       setGmailAuthenticated(response.data.authenticated);
     } catch (error) {
@@ -79,20 +108,14 @@ const MainApp: React.FC = () => {
         alert("Please log in first");
         return;
       }
-
       const token = await getToken();
       const response = await axios.get(
         `http://localhost:8000/auth/gmail?user_id=${user.uid}`,
-        {
-          headers: { Authorization: `Bearer ${token}` },
-        }
+        { headers: { Authorization: `Bearer ${token}` } }
       );
-
-      console.log("🔐 Redirecting to Gmail OAuth...");
       window.location.href = response.data.auth_url;
     } catch (error) {
       console.error("Error initiating Gmail auth:", error);
-      alert("Failed to initiate Gmail authentication");
     }
   };
 
@@ -116,14 +139,10 @@ const MainApp: React.FC = () => {
           filter_by_preferences: true,
           user_id: user?.uid,
         },
-        headers: {
-          Authorization: `Bearer ${token}`,
-        },
+        headers: { Authorization: `Bearer ${token}` },
       });
-      console.log("Received data:", response.data);
       setMessagesData(response.data);
     } catch (error: any) {
-      console.error("Error fetching messages:", error);
       setError(error.message || "Failed to fetch messages");
     }
     setLoading(false);
@@ -137,259 +156,234 @@ const MainApp: React.FC = () => {
     );
   };
 
+  const navLinks = [
+    { path: "/", name: "Messages", icon: "📬" },
+    { path: "/calendar", name: "Calendar", icon: "📅" },
+    { path: "/saved", name: "Saved", icon: "💾" },
+    { path: "/dashboard", name: "Dashboard", icon: "📊" },
+  ];
+
   return (
-    <div style={{ display: "flex", height: "100vh" }}>
-      <div
-        style={{
-          width: "300px",
-          padding: "20px",
-          borderRight: "1px solid #ccc",
-          overflowY: "auto",
-          backgroundColor: "#f8f9fa",
-        }}
+    <div className="flex h-screen bg-gray-50 dark:bg-dark-bg">
+      {/* Sidebar */}
+      <aside
+        className={`${
+          sidebarOpen ? "w-80" : "w-20"
+        } bg-white dark:bg-dark-card border-r border-gray-200 dark:border-dark-border transition-all duration-300 flex flex-col`}
       >
-        <h2>Message Aggregator</h2>
-        <div
-          style={{
-            marginBottom: "20px",
-            padding: "10px",
-            backgroundColor: "white",
-            borderRadius: "8px",
-          }}
-        >
-          <small
-            style={{ display: "block", marginBottom: "5px", color: "#666" }}
-          >
-            Logged in as:
-          </small>
-          <small
-            style={{
-              display: "block",
-              fontWeight: "bold",
-              marginBottom: "10px",
-            }}
-          >
-            {user?.email}
-          </small>
-          <button
-            onClick={() => logout()}
-            style={{
-              width: "100%",
-              padding: "8px",
-              fontSize: "12px",
-              backgroundColor: "#dc3545",
-              color: "white",
-              border: "none",
-              borderRadius: "4px",
-              cursor: "pointer",
-            }}
-          >
-            Logout
-          </button>
+        {/* Header */}
+        <div className="p-6 border-b border-gray-200 dark:border-dark-border">
+          <div className="flex items-center justify-between">
+            {sidebarOpen && (
+              <h1 className="text-2xl font-bold bg-gradient-to-r from-primary-500 to-blue-600 bg-clip-text text-transparent animate-fade-in">
+                MessageHub
+              </h1>
+            )}
+            <button
+              onClick={() => setSidebarOpen(!sidebarOpen)}
+              className="p-2 rounded-lg hover:bg-gray-100 dark:hover:bg-dark-bg transition-colors"
+            >
+              <svg
+                className="w-6 h-6"
+                fill="none"
+                viewBox="0 0 24 24"
+                stroke="currentColor"
+              >
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  strokeWidth={2}
+                  d={
+                    sidebarOpen
+                      ? "M11 19l-7-7 7-7m8 14l-7-7 7-7"
+                      : "M13 5l7 7-7 7M5 5l7 7-7 7"
+                  }
+                />
+              </svg>
+            </button>
+          </div>
         </div>
 
-        <ul style={{ listStyle: "none", padding: 0, marginBottom: "20px" }}>
-          <li style={{ marginBottom: "10px" }}>
-            <a href="/" style={{ textDecoration: "none", color: "#007bff" }}>
-              📬 Messages
-            </a>
-          </li>
-          <li style={{ marginBottom: "10px" }}>
-            <a
-              href="/calendar"
-              style={{ textDecoration: "none", color: "#007bff" }}
-            >
-              📅 Calendar
-            </a>
-          </li>
-          {/* ✅ Add Saved Messages Link */}
-          <li style={{ marginBottom: "10px" }}>
-            <a
-              href="/saved"
-              style={{ textDecoration: "none", color: "#007bff" }}
-            >
-              💾 Saved Messages
-            </a>
-          </li>
-          <li style={{ marginBottom: "10px" }}>
-            <a
-              href="/dashboard"
-              style={{ textDecoration: "none", color: "#007bff" }}
-            >
-              📊 Dashboard
-            </a>
-          </li>
-        </ul>
+        <div className="flex-1 overflow-y-auto p-4">
+          {sidebarOpen && (
+            <>
+              {/* User Info */}
+              <div className="mb-6 p-4 card animate-slide-up">
+                <div className="flex items-center justify-between mb-3">
+                  <span className="text-sm text-gray-500 dark:text-gray-400">
+                    Logged in as
+                  </span>
+                  <ThemeToggle />
+                </div>
+                <p className="font-semibold truncate mb-3">{user?.email}</p>
+                <button
+                  onClick={() => logout()}
+                  className="w-full py-2 px-4 bg-red-500 hover:bg-red-600 text-white rounded-lg transition-colors duration-200 font-medium"
+                >
+                  Logout
+                </button>
+              </div>
 
-        <div style={{ marginTop: "30px" }}>
-          <h3>Select Platforms:</h3>
+              {/* Navigation */}
+              <nav className="space-y-2 mb-6">
+                {navLinks.map((link) => (
+                  <button
+                    key={link.path}
+                    onClick={() => navigate(link.path)}
+                    className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg transition-all duration-200 ${
+                      location.pathname === link.path
+                        ? "bg-primary-50 dark:bg-primary-900/20 text-primary-600 dark:text-primary-400 font-semibold"
+                        : "hover:bg-gray-100 dark:hover:bg-dark-bg"
+                    }`}
+                  >
+                    <span className="text-2xl">{link.icon}</span>
+                    <span>{link.name}</span>
+                  </button>
+                ))}
+              </nav>
 
-          <label style={{ display: "block", marginBottom: "10px" }}>
-            <input
-              type="checkbox"
-              checked={selectedPlatforms.includes("telegram")}
-              onChange={() => handlePlatformToggle("telegram")}
-            />
-            {" Telegram"}
-          </label>
+              {/* Platform Selection */}
+              <div className="mb-6">
+                <h3 className="font-bold mb-3 text-lg">Select Platforms</h3>
+                <div className="space-y-2">
+                  {platforms.map((platform) => (
+                    <label
+                      key={platform.id}
+                      className={`flex items-center gap-3 p-3 rounded-lg cursor-pointer transition-all duration-200 ${
+                        selectedPlatforms.includes(platform.id)
+                          ? "bg-primary-50 dark:bg-primary-900/20 ring-2 ring-primary-500"
+                          : "hover:bg-gray-100 dark:hover:bg-dark-bg"
+                      } ${
+                        platform.id === "gmail" && !gmailAuthenticated
+                          ? "opacity-50"
+                          : ""
+                      }`}
+                    >
+                      <input
+                        type="checkbox"
+                        checked={selectedPlatforms.includes(platform.id)}
+                        onChange={() => handlePlatformToggle(platform.id)}
+                        disabled={
+                          platform.id === "gmail" && !gmailAuthenticated
+                        }
+                        className="w-5 h-5 text-primary-600 rounded focus:ring-primary-500"
+                      />
+                      <span className="text-xl">{platform.icon}</span>
+                      <span className="font-medium">{platform.name}</span>
+                      {platform.id === "gmail" && gmailAuthenticated && (
+                        <span className="ml-auto text-green-500 text-sm">
+                          ✓ Connected
+                        </span>
+                      )}
+                    </label>
+                  ))}
+                </div>
+                {!gmailAuthenticated && (
+                  <button
+                    onClick={handleGmailAuth}
+                    className="w-full mt-3 py-2 px-4 bg-blue-500 hover:bg-blue-600 text-white rounded-lg transition-colors duration-200 text-sm font-medium"
+                  >
+                    Connect Gmail
+                  </button>
+                )}
+              </div>
 
-          <label style={{ display: "block", marginBottom: "10px" }}>
-            <input
-              type="checkbox"
-              checked={selectedPlatforms.includes("twitter")}
-              onChange={() => handlePlatformToggle("twitter")}
-            />
-            {" Twitter (X)"}
-          </label>
+              {/* Keywords */}
+              {selectedPlatforms.includes("twitter") && (
+                <div className="mb-4">
+                  <label className="block text-sm font-medium mb-2">
+                    Twitter Keyword
+                  </label>
+                  <input
+                    type="text"
+                    value={twitterKeyword}
+                    onChange={(e) => setTwitterKeyword(e.target.value)}
+                    className="input text-sm"
+                    placeholder="e.g., technology"
+                  />
+                </div>
+              )}
 
-          <label style={{ display: "block", marginBottom: "10px" }}>
-            <input
-              type="checkbox"
-              checked={selectedPlatforms.includes("gmail")}
-              onChange={() => handlePlatformToggle("gmail")}
-              disabled={!gmailAuthenticated}
-            />
-            {" Gmail"}
-            {!gmailAuthenticated && (
+              {selectedPlatforms.includes("reddit") && (
+                <div className="space-y-3 mb-4">
+                  <div>
+                    <label className="block text-sm font-medium mb-2">
+                      Reddit Keyword
+                    </label>
+                    <input
+                      type="text"
+                      value={redditKeyword}
+                      onChange={(e) => setRedditKeyword(e.target.value)}
+                      className="input text-sm"
+                      placeholder="e.g., python"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium mb-2">
+                      Subreddit
+                    </label>
+                    <input
+                      type="text"
+                      value={redditSubreddit}
+                      onChange={(e) => setRedditSubreddit(e.target.value)}
+                      className="input text-sm"
+                      placeholder="e.g., all"
+                    />
+                  </div>
+                </div>
+              )}
+
+              {/* Load Button */}
               <button
-                onClick={handleGmailAuth}
-                style={{
-                  marginLeft: "10px",
-                  padding: "4px 12px",
-                  fontSize: "11px",
-                  cursor: "pointer",
-                  backgroundColor: "#007bff",
-                  color: "white",
-                  border: "none",
-                  borderRadius: "4px",
-                }}
+                onClick={loadMessages}
+                disabled={loading || selectedPlatforms.length === 0}
+                className={`w-full py-3 px-4 rounded-lg font-bold transition-all duration-200 ${
+                  loading || selectedPlatforms.length === 0
+                    ? "bg-gray-300 dark:bg-gray-700 cursor-not-allowed"
+                    : "btn-primary"
+                }`}
               >
-                Connect
+                {loading ? (
+                  <span className="flex items-center justify-center gap-2">
+                    <svg className="animate-spin h-5 w-5" viewBox="0 0 24 24">
+                      <circle
+                        className="opacity-25"
+                        cx="12"
+                        cy="12"
+                        r="10"
+                        stroke="currentColor"
+                        strokeWidth="4"
+                        fill="none"
+                      />
+                      <path
+                        className="opacity-75"
+                        fill="currentColor"
+                        d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
+                      />
+                    </svg>
+                    Loading...
+                  </span>
+                ) : (
+                  "🚀 Load Messages"
+                )}
               </button>
-            )}
-            {gmailAuthenticated && (
-              <span
-                style={{
-                  marginLeft: "10px",
-                  fontSize: "11px",
-                  color: "green",
-                }}
-              >
-                ✓ Connected
-              </span>
-            )}
-          </label>
 
-          <label style={{ display: "block", marginBottom: "10px" }}>
-            <input
-              type="checkbox"
-              checked={selectedPlatforms.includes("reddit")}
-              onChange={() => handlePlatformToggle("reddit")}
-            />
-            {" Reddit"}
-          </label>
-
-          <label style={{ display: "block", marginBottom: "10px" }}>
-            <input
-              type="checkbox"
-              checked={selectedPlatforms.includes("slack")}
-              onChange={() => handlePlatformToggle("slack")}
-            />
-            {" Slack"}
-          </label>
-
-          <label style={{ display: "block", marginBottom: "10px" }}>
-            <input
-              type="checkbox"
-              checked={selectedPlatforms.includes("discord")}
-              onChange={() => handlePlatformToggle("discord")}
-            />
-            {" Discord"}
-          </label>
+              {error && (
+                <div className="mt-3 p-3 bg-red-100 dark:bg-red-900/20 text-red-700 dark:text-red-400 rounded-lg text-sm">
+                  {error}
+                </div>
+              )}
+            </>
+          )}
         </div>
+      </aside>
 
-        {selectedPlatforms.includes("twitter") && (
-          <div style={{ marginTop: "20px" }}>
-            <h4>Twitter Keyword:</h4>
-            <input
-              type="text"
-              value={twitterKeyword}
-              onChange={(e) => setTwitterKeyword(e.target.value)}
-              style={{ width: "100%", padding: "5px" }}
-            />
-          </div>
-        )}
-
-        {selectedPlatforms.includes("reddit") && (
-          <div style={{ marginTop: "20px" }}>
-            <h4>Reddit Settings:</h4>
-            <label
-              style={{
-                display: "block",
-                marginBottom: "5px",
-                fontSize: "12px",
-              }}
-            >
-              Keyword:
-            </label>
-            <input
-              type="text"
-              value={redditKeyword}
-              onChange={(e) => setRedditKeyword(e.target.value)}
-              placeholder="e.g., technology, python"
-              style={{ width: "100%", padding: "5px", marginBottom: "10px" }}
-            />
-            <label
-              style={{
-                display: "block",
-                marginBottom: "5px",
-                fontSize: "12px",
-              }}
-            >
-              Subreddit:
-            </label>
-            <input
-              type="text"
-              value={redditSubreddit}
-              onChange={(e) => setRedditSubreddit(e.target.value)}
-              placeholder="e.g., all, programming"
-              style={{ width: "100%", padding: "5px" }}
-            />
-          </div>
-        )}
-
-        <button
-          onClick={loadMessages}
-          style={{
-            marginTop: "20px",
-            padding: "10px 20px",
-            cursor: "pointer",
-            width: "100%",
-            backgroundColor: selectedPlatforms.length > 0 ? "#007bff" : "#ccc",
-            color: "white",
-            border: "none",
-            borderRadius: "4px",
-            fontSize: "14px",
-            fontWeight: "bold",
-          }}
-          disabled={loading || selectedPlatforms.length === 0}
-        >
-          {loading ? "Loading..." : "Load Messages"}
-        </button>
-
-        {error && (
-          <div style={{ marginTop: "10px", color: "red", fontSize: "12px" }}>
-            {error}
-          </div>
-        )}
-      </div>
-
-      <main style={{ flex: 1, overflow: "auto", backgroundColor: "#ffffff" }}>
+      {/* Main Content */}
+      <main className="flex-1 overflow-auto">
         <Routes>
           <Route path="/" element={<MessageList messages={messagesData} />} />
           <Route path="/calendar" element={<Calendar />} />
-          <Route path="/saved" element={<SavedMessages />} />{" "}
-          {/* ✅ Add this */}
+          <Route path="/saved" element={<SavedMessages />} />
           <Route path="/dashboard" element={<Dashboard />} />
         </Routes>
       </main>
@@ -399,29 +393,31 @@ const MainApp: React.FC = () => {
 
 const App: React.FC = () => {
   return (
-    <AuthProvider>
-      <Router>
-        <Routes>
-          <Route path="/login" element={<Login />} />
-          <Route
-            path="/setup"
-            element={
-              <ProtectedRoute>
-                <Setup />
-              </ProtectedRoute>
-            }
-          />
-          <Route
-            path="/*"
-            element={
-              <ProtectedRoute>
-                <MainApp />
-              </ProtectedRoute>
-            }
-          />
-        </Routes>
-      </Router>
-    </AuthProvider>
+    <ThemeProvider>
+      <AuthProvider>
+        <Router>
+          <Routes>
+            <Route path="/login" element={<Login />} />
+            <Route
+              path="/setup"
+              element={
+                <ProtectedRoute>
+                  <Setup />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/*"
+              element={
+                <ProtectedRoute>
+                  <MainApp />
+                </ProtectedRoute>
+              }
+            />
+          </Routes>
+        </Router>
+      </AuthProvider>
+    </ThemeProvider>
   );
 };
 
