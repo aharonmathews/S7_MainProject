@@ -1,167 +1,130 @@
 import React from "react";
 import { Message } from "../types";
 
-interface MessageCardProps {
+const PLATFORM_CFG: Record<
+  string,
+  { gradient: string; icon: string; bg: string; text: string }
+> = {
+  telegram: {
+    gradient: "from-[#229ED9] to-[#1a7fc4]",
+    icon: "✈️",
+    bg: "bg-[#229ED9]/10 dark:bg-[#229ED9]/20",
+    text: "text-[#229ED9]",
+  },
+  twitter: {
+    gradient: "from-slate-700 to-slate-900",
+    icon: "𝕏",
+    bg: "bg-slate-100 dark:bg-slate-800",
+    text: "text-slate-700 dark:text-slate-300",
+  },
+  gmail: {
+    gradient: "from-[#EA4335] to-[#c5221f]",
+    icon: "✉️",
+    bg: "bg-red-50 dark:bg-red-900/20",
+    text: "text-red-600 dark:text-red-400",
+  },
+  reddit: {
+    gradient: "from-[#FF4500] to-[#cc3700]",
+    icon: "👾",
+    bg: "bg-orange-50 dark:bg-orange-900/20",
+    text: "text-orange-600 dark:text-orange-400",
+  },
+  slack: {
+    gradient: "from-[#4A154B] to-[#611f69]",
+    icon: "💬",
+    bg: "bg-purple-50 dark:bg-purple-900/20",
+    text: "text-purple-600 dark:text-purple-400",
+  },
+  discord: {
+    gradient: "from-[#5865F2] to-[#4752c4]",
+    icon: "🎮",
+    bg: "bg-indigo-50 dark:bg-indigo-900/20",
+    text: "text-indigo-600 dark:text-indigo-400",
+  },
+};
+
+interface Props {
   message: Message;
   onClick: () => void;
 }
 
-const MessageCard: React.FC<MessageCardProps> = ({ message, onClick }) => {
-  const getPlatformConfig = (platform: string) => {
-    const configs: Record<
-      string,
-      { color: string; icon: string; gradient: string }
-    > = {
-      telegram: {
-        color: "bg-blue-500",
-        icon: "📱",
-        gradient: "from-blue-500 to-blue-600",
-      },
-      twitter: {
-        color: "bg-sky-400",
-        icon: "🐦",
-        gradient: "from-sky-400 to-blue-500",
-      },
-      gmail: {
-        color: "bg-red-500",
-        icon: "📧",
-        gradient: "from-red-500 to-pink-500",
-      },
-      reddit: {
-        color: "bg-orange-500",
-        icon: "🔶",
-        gradient: "from-orange-500 to-red-500",
-      },
-      slack: {
-        color: "bg-purple-600",
-        icon: "💬",
-        gradient: "from-purple-600 to-pink-500",
-      },
-      discord: {
-        color: "bg-indigo-500",
-        icon: "🎮",
-        gradient: "from-indigo-500 to-purple-600",
-      },
-    };
-    return (
-      configs[platform] || {
-        color: "bg-gray-500",
-        icon: "📬",
-        gradient: "from-gray-500 to-gray-600",
-      }
-    );
+const MessageCard: React.FC<Props> = ({ message, onClick }) => {
+  const cfg = PLATFORM_CFG[message.platform] ?? {
+    gradient: "from-slate-500 to-slate-700",
+    icon: "📬",
+    bg: "bg-slate-100 dark:bg-slate-800",
+    text: "text-slate-600",
   };
 
-  const truncateText = (text: string, maxLength: number) => {
-    if (text.length <= maxLength) return text;
-    return text.substring(0, maxLength) + "...";
-  };
+  const ts = new Date(message.timestamp).toLocaleString("en-US", {
+    month: "short",
+    day: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+  });
 
-  const config = getPlatformConfig(message.platform);
-  const formattedDate = new Date(message.timestamp).toLocaleDateString(
-    "en-US",
-    {
-      month: "short",
-      day: "numeric",
-      hour: "2-digit",
-      minute: "2-digit",
-    }
-  );
+  const preview =
+    message.content.length > 160
+      ? message.content.slice(0, 160) + "…"
+      : message.content;
 
   return (
-    <div onClick={onClick} className="card card-hover p-5 group">
-      {/* Header */}
-      <div className="flex items-start justify-between mb-3">
-        <div className="flex-1">
-          <h3 className="text-lg font-semibold text-gray-900 dark:text-gray-100 mb-2 group-hover:text-primary-600 dark:group-hover:text-primary-400 transition-colors">
-            {message.title}
-          </h3>
-          <div className="flex flex-wrap gap-2 items-center">
-            <span
-              className={`inline-flex items-center gap-1 px-3 py-1 rounded-full text-white text-xs font-bold bg-gradient-to-r ${config.gradient}`}
-            >
-              <span>{config.icon}</span>
-              <span className="capitalize">{message.platform}</span>
-            </span>
-            {message.sender && (
-              <span className="text-xs text-gray-600 dark:text-gray-400 flex items-center gap-1">
-                <svg
-                  className="w-4 h-4"
-                  fill="none"
-                  viewBox="0 0 24 24"
-                  stroke="currentColor"
-                >
-                  <path
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    strokeWidth={2}
-                    d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"
-                  />
-                </svg>
-                {message.sender}
+    <div
+      onClick={onClick}
+      className="card card-hover p-5 group flex flex-col gap-3"
+    >
+      {/* Top row */}
+      <div className="flex items-start justify-between gap-3">
+        <div className="flex items-start gap-3 flex-1 min-w-0">
+          {/* Platform dot */}
+          <div
+            className={`mt-0.5 w-8 h-8 rounded-lg bg-gradient-to-br ${cfg.gradient} flex items-center justify-center text-white text-sm shrink-0`}
+          >
+            {cfg.icon}
+          </div>
+
+          <div className="flex-1 min-w-0">
+            <h3 className="text-sm font-semibold text-slate-900 dark:text-slate-100 leading-snug line-clamp-2 group-hover:text-violet-600 dark:group-hover:text-violet-400 transition-colors">
+              {message.title}
+            </h3>
+            <div className="flex flex-wrap items-center gap-2 mt-1">
+              <span
+                className={`platform-badge ${cfg.bg} ${cfg.text} capitalize`}
+              >
+                {message.platform}
               </span>
-            )}
-            {message.chat && (
-              <span className="text-xs text-gray-600 dark:text-gray-400 flex items-center gap-1">
-                <svg
-                  className="w-4 h-4"
-                  fill="none"
-                  viewBox="0 0 24 24"
-                  stroke="currentColor"
-                >
-                  <path
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    strokeWidth={2}
-                    d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z"
-                  />
-                </svg>
-                {message.chat}
-              </span>
-            )}
+              {message.sender && (
+                <span className="text-xs text-slate-500 dark:text-slate-400 truncate max-w-[120px]">
+                  👤 {message.sender}
+                </span>
+              )}
+              {message.chat && (
+                <span className="text-xs text-slate-500 dark:text-slate-400 truncate max-w-[120px]">
+                  # {message.chat}
+                </span>
+              )}
+            </div>
           </div>
         </div>
-        <div className="text-xs text-gray-500 dark:text-gray-400 flex items-center gap-1">
-          <svg
-            className="w-4 h-4"
-            fill="none"
-            viewBox="0 0 24 24"
-            stroke="currentColor"
-          >
-            <path
-              strokeLinecap="round"
-              strokeLinejoin="round"
-              strokeWidth={2}
-              d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"
-            />
-          </svg>
-          {formattedDate}
-        </div>
+
+        <span className="text-[11px] text-slate-400 dark:text-slate-600 shrink-0 pt-0.5 whitespace-nowrap">
+          {ts}
+        </span>
       </div>
 
-      {/* Content Preview */}
-      <p className="text-gray-700 dark:text-gray-300 text-sm leading-relaxed mb-3">
-        {truncateText(message.content, 200)}
+      {/* Preview */}
+      <p className="text-xs text-slate-600 dark:text-slate-400 leading-relaxed line-clamp-2">
+        {preview}
       </p>
 
       {/* Footer */}
-      <div className="flex items-center justify-between pt-3 border-t border-gray-200 dark:border-dark-border">
-        <span className="text-xs text-gray-500 dark:text-gray-400 italic">
-          Click to view details
+      <div className="flex items-center justify-between pt-2 border-t border-slate-100 dark:border-slate-800">
+        <span className="text-[11px] text-slate-400 italic">
+          Click to expand
         </span>
-        <svg
-          className="w-5 h-5 text-primary-500 group-hover:translate-x-1 transition-transform"
-          fill="none"
-          viewBox="0 0 24 24"
-          stroke="currentColor"
-        >
-          <path
-            strokeLinecap="round"
-            strokeLinejoin="round"
-            strokeWidth={2}
-            d="M9 5l7 7-7 7"
-          />
-        </svg>
+        <span className="text-violet-500 group-hover:translate-x-0.5 transition-transform text-sm">
+          →
+        </span>
       </div>
     </div>
   );

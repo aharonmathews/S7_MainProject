@@ -4,8 +4,8 @@ import { savedMessagesApi } from "../services/savedMessagesApi";
 import MessageModal from "./MessageModal";
 
 interface SavedMessage {
-  id: string; // saved document ID
-  message_id: string; // original message ID
+  id: string;
+  message_id: string;
   platform: string;
   title: string;
   content: string;
@@ -14,297 +14,197 @@ interface SavedMessage {
   chat?: string;
   url?: string;
   saved_at: string;
-  ai_scores?: {
-    semantic_score?: number;
-    keyword_score?: number;
-    overall_score?: number;
-  };
+  ai_scores?: any;
 }
 
+const PLATFORM_CFG: Record<string, { icon: string; bg: string; text: string }> =
+  {
+    telegram: {
+      icon: "✈️",
+      bg: "bg-sky-50 dark:bg-sky-900/20",
+      text: "text-sky-600 dark:text-sky-400",
+    },
+    gmail: {
+      icon: "✉️",
+      bg: "bg-red-50 dark:bg-red-900/20",
+      text: "text-red-600 dark:text-red-400",
+    },
+    discord: {
+      icon: "🎮",
+      bg: "bg-indigo-50 dark:bg-indigo-900/20",
+      text: "text-indigo-600 dark:text-indigo-400",
+    },
+    reddit: {
+      icon: "👾",
+      bg: "bg-orange-50 dark:bg-orange-900/20",
+      text: "text-orange-600 dark:text-orange-400",
+    },
+    slack: {
+      icon: "💬",
+      bg: "bg-purple-50 dark:bg-purple-900/20",
+      text: "text-purple-600 dark:text-purple-400",
+    },
+    twitter: {
+      icon: "𝕏",
+      bg: "bg-slate-100 dark:bg-slate-800",
+      text: "text-slate-700 dark:text-slate-300",
+    },
+  };
+
 const SavedMessages: React.FC = () => {
-  const [savedMessages, setSavedMessages] = useState<SavedMessage[]>([]);
+  const [saved, setSaved] = useState<SavedMessage[]>([]);
   const [loading, setLoading] = useState(true);
-  const [selectedMessage, setSelectedMessage] = useState<SavedMessage | null>(
-    null
-  );
+  const [selected, setSelected] = useState<SavedMessage | null>(null);
   const { getToken } = useAuth();
 
   useEffect(() => {
-    loadSavedMessages();
+    load();
   }, []);
 
-  const loadSavedMessages = async () => {
+  const load = async () => {
     try {
       setLoading(true);
       const token = await getToken();
-      if (!token) {
-        setLoading(false);
-        return;
-      }
-
-      const messages = await savedMessagesApi.getSavedMessages(token);
-      console.log("📥 Loaded saved messages:", messages);
-      setSavedMessages(messages);
-      setLoading(false);
-    } catch (error) {
-      console.error("Error loading saved messages:", error);
-      setLoading(false);
-    }
-  };
-
-  const handleDeleteMessage = async (savedId: string) => {
-    if (!confirm("Remove this message from saved?")) return;
-
-    try {
-      const token = await getToken();
       if (!token) return;
-
-      await savedMessagesApi.deleteSavedMessage(token, savedId);
-      console.log(`✅ Deleted saved message: ${savedId}`);
-      loadSavedMessages(); // Reload list
-      setSelectedMessage(null); // Close modal if open
-    } catch (error) {
-      console.error("Error deleting saved message:", error);
-      alert("Failed to delete message");
+      const msgs = await savedMessagesApi.getSavedMessages(token);
+      setSaved(msgs);
+    } catch {
+    } finally {
+      setLoading(false);
     }
   };
 
-  const getPlatformColor = (platform: string) => {
-    const colors: Record<string, string> = {
-      telegram: "#0088cc",
-      twitter: "#1da1f2",
-      gmail: "#ea4335",
-      reddit: "#ff4500",
-      slack: "#4a154b",
-      discord: "#5865f2",
-    };
-    return colors[platform] || "#6c757d";
+  const remove = async (id: string) => {
+    if (!confirm("Remove this message?")) return;
+    const token = await getToken();
+    if (!token) return;
+    await savedMessagesApi.deleteSavedMessage(token, id);
+    load();
+    setSelected(null);
   };
 
-  const truncateText = (text: string, maxLength: number) => {
-    if (text.length <= maxLength) return text;
-    return text.substring(0, maxLength) + "...";
-  };
-
-  if (loading) {
+  if (loading)
     return (
-      <div style={{ padding: "20px", textAlign: "center" }}>
-        <div style={{ fontSize: "18px", color: "#666" }}>
-          Loading saved messages...
+      <div className="h-full flex items-center justify-center">
+        <div className="flex flex-col items-center gap-3">
+          <div className="w-8 h-8 border-2 border-violet-500 border-t-transparent rounded-full animate-spin" />
+          <p className="text-sm text-slate-500">Loading saved messages…</p>
         </div>
       </div>
     );
-  }
 
   return (
-    <div style={{ padding: "20px", maxWidth: "1200px", margin: "0 auto" }}>
-      <h1>💾 Saved Messages</h1>
+    <div className="p-6 max-w-4xl mx-auto animate-fade-in">
+      {/* Header */}
+      <div className="flex items-end justify-between mb-6">
+        <div>
+          <h1 className="text-2xl font-bold text-slate-900 dark:text-white">
+            Saved Messages
+          </h1>
+          <p className="text-sm text-slate-500 dark:text-slate-400 mt-1">
+            {saved.length} message{saved.length !== 1 ? "s" : ""} bookmarked
+          </p>
+        </div>
+      </div>
 
-      {savedMessages.length === 0 ? (
-        <div
-          style={{
-            padding: "60px 40px",
-            textAlign: "center",
-            color: "#999",
-            backgroundColor: "white",
-            borderRadius: "12px",
-            marginTop: "20px",
-            boxShadow: "0 2px 8px rgba(0,0,0,0.1)",
-          }}
-        >
-          <div style={{ fontSize: "64px", marginBottom: "20px" }}>💾</div>
-          <h2 style={{ color: "#666", marginBottom: "10px" }}>
-            No saved messages yet
+      {saved.length === 0 ? (
+        <div className="card p-16 text-center">
+          <div className="w-16 h-16 rounded-2xl bg-slate-100 dark:bg-slate-800 flex items-center justify-center text-3xl mx-auto mb-4">
+            🔖
+          </div>
+          <h2 className="text-lg font-semibold text-slate-700 dark:text-slate-300 mb-2">
+            Nothing saved yet
           </h2>
-          <p style={{ fontSize: "16px" }}>
-            Click the "💾 Save" button on any message to save it here for later!
+          <p className="text-sm text-slate-400">
+            Open any message and click Save to bookmark it here.
           </p>
         </div>
       ) : (
-        <div>
-          <p
-            style={{
-              color: "#666",
-              marginBottom: "20px",
-              fontSize: "16px",
-              padding: "15px",
-              backgroundColor: "#f8f9fa",
-              borderRadius: "8px",
-              border: "1px solid #dee2e6",
-            }}
-          >
-            📊 You have {savedMessages.length} saved message
-            {savedMessages.length !== 1 ? "s" : ""}
-          </p>
-
-          <div
-            style={{ display: "flex", flexDirection: "column", gap: "15px" }}
-          >
-            {savedMessages.map((message) => (
+        <div className="space-y-3">
+          {saved.map((msg) => {
+            const cfg = PLATFORM_CFG[msg.platform] ?? {
+              icon: "📬",
+              bg: "bg-slate-100",
+              text: "text-slate-600",
+            };
+            return (
               <div
-                key={message.id}
-                style={{
-                  position: "relative",
-                  padding: "20px",
-                  backgroundColor: "white",
-                  borderRadius: "12px",
-                  border: "1px solid #ddd",
-                  cursor: "pointer",
-                  transition: "all 0.2s ease",
-                  boxShadow: "0 2px 4px rgba(0,0,0,0.1)",
-                }}
-                onClick={() => setSelectedMessage(message)}
-                onMouseEnter={(e) => {
-                  e.currentTarget.style.boxShadow =
-                    "0 4px 12px rgba(0,0,0,0.15)";
-                  e.currentTarget.style.transform = "translateY(-2px)";
-                }}
-                onMouseLeave={(e) => {
-                  e.currentTarget.style.boxShadow = "0 2px 4px rgba(0,0,0,0.1)";
-                  e.currentTarget.style.transform = "translateY(0)";
-                }}
+                key={msg.id}
+                className="card card-hover p-5 flex gap-4"
+                onClick={() => setSelected(msg)}
               >
-                {/* Delete Button */}
-                <button
-                  onClick={(e) => {
-                    e.stopPropagation(); // Prevent opening modal
-                    handleDeleteMessage(message.id);
-                  }}
-                  style={{
-                    position: "absolute",
-                    top: "15px",
-                    right: "15px",
-                    padding: "8px 14px",
-                    backgroundColor: "#dc3545",
-                    color: "white",
-                    border: "none",
-                    borderRadius: "6px",
-                    cursor: "pointer",
-                    fontSize: "13px",
-                    fontWeight: "bold",
-                    transition: "background-color 0.2s",
-                  }}
-                  onMouseEnter={(e) =>
-                    (e.currentTarget.style.backgroundColor = "#c82333")
-                  }
-                  onMouseLeave={(e) =>
-                    (e.currentTarget.style.backgroundColor = "#dc3545")
-                  }
-                >
-                  🗑️ Remove
-                </button>
+                <div className="shrink-0 w-10 h-10 rounded-xl bg-gradient-to-br from-violet-500 to-indigo-500 flex items-center justify-center text-white text-lg">
+                  {cfg.icon}
+                </div>
 
-                {/* Message Header */}
-                <div style={{ marginBottom: "12px", paddingRight: "100px" }}>
-                  <h3
-                    style={{
-                      margin: "0 0 8px 0",
-                      fontSize: "18px",
-                      color: "#333",
-                    }}
-                  >
-                    {message.title}
-                  </h3>
-                  <div
-                    style={{
-                      display: "flex",
-                      gap: "12px",
-                      flexWrap: "wrap",
-                      fontSize: "13px",
-                      color: "#666",
-                    }}
-                  >
-                    <span
-                      style={{
-                        backgroundColor: getPlatformColor(message.platform),
-                        color: "white",
-                        padding: "3px 10px",
-                        borderRadius: "12px",
-                        fontWeight: "bold",
-                        textTransform: "capitalize",
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-start justify-between gap-3">
+                    <h3 className="text-sm font-semibold text-slate-900 dark:text-slate-100 line-clamp-1">
+                      {msg.title}
+                    </h3>
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        remove(msg.id);
                       }}
+                      className="btn-danger shrink-0 py-1 px-2 text-xs"
                     >
-                      {message.platform}
+                      🗑
+                    </button>
+                  </div>
+
+                  <div className="flex flex-wrap gap-2 mt-1 mb-2">
+                    <span
+                      className={`platform-badge text-[11px] ${cfg.bg} ${cfg.text} capitalize`}
+                    >
+                      {msg.platform}
                     </span>
-                    {message.sender && <span>👤 {message.sender}</span>}
-                    {message.chat && <span>💬 {message.chat}</span>}
+                    {msg.sender && (
+                      <span className="text-xs text-slate-400">
+                        👤 {msg.sender}
+                      </span>
+                    )}
+                    {msg.chat && (
+                      <span className="text-xs text-slate-400">
+                        # {msg.chat}
+                      </span>
+                    )}
+                  </div>
+
+                  <p className="text-xs text-slate-500 dark:text-slate-400 line-clamp-2 leading-relaxed">
+                    {msg.content.slice(0, 180)}
+                    {msg.content.length > 180 ? "…" : ""}
+                  </p>
+
+                  <div className="flex gap-4 mt-2 text-[11px] text-slate-400">
+                    <span>
+                      📅 {new Date(msg.timestamp).toLocaleDateString()}
+                    </span>
+                    <span>
+                      🔖 Saved {new Date(msg.saved_at).toLocaleDateString()}
+                    </span>
                   </div>
                 </div>
-
-                {/* Message Content Preview */}
-                <div
-                  style={{
-                    marginTop: "12px",
-                    padding: "12px",
-                    backgroundColor: "#f8f9fa",
-                    borderRadius: "6px",
-                  }}
-                >
-                  <p
-                    style={{
-                      margin: 0,
-                      color: "#555",
-                      lineHeight: "1.6",
-                      fontSize: "14px",
-                    }}
-                  >
-                    {truncateText(message.content, 200)}
-                  </p>
-                </div>
-
-                {/* Timestamps */}
-                <div
-                  style={{
-                    marginTop: "12px",
-                    paddingTop: "12px",
-                    borderTop: "1px solid #e9ecef",
-                    display: "flex",
-                    justifyContent: "space-between",
-                    fontSize: "12px",
-                    color: "#999",
-                  }}
-                >
-                  <span>
-                    📅 Original:{" "}
-                    {new Date(message.timestamp).toLocaleDateString()}
-                  </span>
-                  <span>
-                    💾 Saved: {new Date(message.saved_at).toLocaleDateString()}
-                  </span>
-                </div>
-
-                {/* Click hint */}
-                <div
-                  style={{
-                    marginTop: "8px",
-                    fontSize: "12px",
-                    color: "#999",
-                    fontStyle: "italic",
-                  }}
-                >
-                  Click to view full details...
-                </div>
               </div>
-            ))}
-          </div>
+            );
+          })}
         </div>
       )}
 
-      {/* Message Modal */}
-      {selectedMessage && (
+      {selected && (
         <MessageModal
           message={{
-            id: selectedMessage.message_id, // Use original message_id
-            platform: selectedMessage.platform,
-            title: selectedMessage.title,
-            content: selectedMessage.content,
-            sender: selectedMessage.sender,
-            timestamp: selectedMessage.timestamp,
-            chat: selectedMessage.chat,
-            url: selectedMessage.url,
-            ai_scores: selectedMessage.ai_scores,
+            id: selected.message_id,
+            platform: selected.platform,
+            title: selected.title,
+            content: selected.content,
+            sender: selected.sender,
+            timestamp: selected.timestamp,
+            chat: selected.chat,
+            url: selected.url,
+            ai_scores: selected.ai_scores,
           }}
-          onClose={() => setSelectedMessage(null)}
+          onClose={() => setSelected(null)}
         />
       )}
     </div>

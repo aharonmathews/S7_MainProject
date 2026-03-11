@@ -23,19 +23,35 @@ interface ChatAssistantProps {
   messageCount: number;
 }
 
-const platformColors: Record<string, string> = {
-  gmail: "bg-red-100 text-red-700",
-  telegram: "bg-blue-100 text-blue-700",
-  twitter: "bg-sky-100 text-sky-700",
-  reddit: "bg-orange-100 text-orange-700",
-  slack: "bg-purple-100 text-purple-700",
-  discord: "bg-indigo-100 text-indigo-700",
+const PLATFORM_BADGE: Record<string, string> = {
+  gmail:
+    "bg-red-50    dark:bg-red-900/30    text-red-600    dark:text-red-400    border border-red-200    dark:border-red-800",
+  telegram:
+    "bg-sky-50    dark:bg-sky-900/30    text-sky-600    dark:text-sky-400    border border-sky-200    dark:border-sky-800",
+  twitter:
+    "bg-slate-100 dark:bg-slate-800     text-slate-700  dark:text-slate-300  border border-slate-200  dark:border-slate-700",
+  reddit:
+    "bg-orange-50 dark:bg-orange-900/30 text-orange-600 dark:text-orange-400 border border-orange-200 dark:border-orange-800",
+  slack:
+    "bg-purple-50 dark:bg-purple-900/30 text-purple-600 dark:text-purple-400 border border-purple-200 dark:border-purple-800",
+  discord:
+    "bg-indigo-50 dark:bg-indigo-900/30 text-indigo-600 dark:text-indigo-400 border border-indigo-200 dark:border-indigo-800",
+};
+
+const PLATFORM_ICON: Record<string, string> = {
+  gmail: "✉️",
+  telegram: "✈️",
+  twitter: "𝕏",
+  reddit: "👾",
+  slack: "💬",
+  discord: "🎮",
 };
 
 const SUGGESTIONS = [
   "Any job interview emails?",
   "Latest project updates?",
   "Important deadlines?",
+  "Any messages from my team?",
 ];
 
 const ChatAssistant: React.FC<ChatAssistantProps> = ({
@@ -47,7 +63,7 @@ const ChatAssistant: React.FC<ChatAssistantProps> = ({
       id: "welcome",
       role: "assistant",
       content:
-        "Please load your messages first, then I can answer questions about them.",
+        "👋 Hi! Load your messages first — then I can search across all your platforms and answer anything.",
       sources: [],
       timestamp: new Date(),
     },
@@ -55,228 +71,308 @@ const ChatAssistant: React.FC<ChatAssistantProps> = ({
   const [input, setInput] = useState("");
   const [loading, setLoading] = useState(false);
   const [isOpen, setIsOpen] = useState(false);
-  const messagesEndRef = useRef<HTMLDivElement>(null);
+  const endRef = useRef<HTMLDivElement>(null);
+  const inputRef = useRef<HTMLInputElement>(null);
   const { getToken } = useAuth();
 
-  // ← Update welcome message when indexing completes
   useEffect(() => {
-    if (isIndexed) {
-      setMessages([
-        {
-          id: "welcome-indexed",
-          role: "assistant",
-          content: `✅ I now have access to ${messageCount} of your messages! Ask me anything.\n\nTry: "Any messages from [name]?" or "Has my job interview email come?" or "What are the latest updates?"`,
-          sources: [],
-          timestamp: new Date(),
-        },
-      ]);
-    } else {
-      setMessages([
-        {
-          id: "welcome",
-          role: "assistant",
-          content:
-            "Please load your messages first, then I can answer questions about them.",
-          sources: [],
-          timestamp: new Date(),
-        },
-      ]);
-    }
+    setMessages([
+      {
+        id: isIndexed ? "ready" : "welcome",
+        role: "assistant",
+        content: isIndexed
+          ? `✅ Ready! I have access to **${messageCount}** messages across your platforms.\n\nTry asking:\n• "Any job interview emails?"\n• "Latest updates from Slack?"\n• "Messages from [name]?"`
+          : "👋 Hi! Load your messages first — then I can search across all your platforms and answer anything.",
+        sources: [],
+        timestamp: new Date(),
+      },
+    ]);
   }, [isIndexed, messageCount]);
 
   useEffect(() => {
-    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
+    endRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages]);
+
+  useEffect(() => {
+    if (isOpen) setTimeout(() => inputRef.current?.focus(), 100);
+  }, [isOpen]);
 
   const handleQuery = async () => {
     if (!input.trim() || loading || !isIndexed) return;
-
-    const userMessage: ChatMessage = {
-      id: Date.now().toString(),
-      role: "user",
-      content: input,
-      timestamp: new Date(),
-    };
-
-    setMessages((prev) => [...prev, userMessage]);
-    const currentInput = input;
+    const q = input.trim();
+    setMessages((p) => [
+      ...p,
+      {
+        id: Date.now().toString(),
+        role: "user",
+        content: q,
+        timestamp: new Date(),
+      },
+    ]);
     setInput("");
     setLoading(true);
-
     try {
       const token = await getToken();
-      const response = await fetch("http://localhost:8000/api/rag/query", {
+      const res = await fetch("http://localhost:8000/api/rag/query", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
           Authorization: `Bearer ${token}`,
         },
-        body: JSON.stringify({ query: currentInput }),
+        body: JSON.stringify({ query: q }),
       });
-
-      const data = await response.json();
-
-      const assistantMessage: ChatMessage = {
-        id: (Date.now() + 1).toString(),
-        role: "assistant",
-        content: data.answer,
-        sources: data.sources || [],
-        timestamp: new Date(),
-      };
-
-      setMessages((prev) => [...prev, assistantMessage]);
-    } catch (error) {
-      setMessages((prev) => [
-        ...prev,
+      const data = await res.json();
+      setMessages((p) => [
+        ...p,
         {
           id: (Date.now() + 1).toString(),
           role: "assistant",
-          content: "Sorry, I encountered an error. Please try again.",
+          content: data.answer,
+          sources: data.sources || [],
+          timestamp: new Date(),
+        },
+      ]);
+    } catch {
+      setMessages((p) => [
+        ...p,
+        {
+          id: (Date.now() + 1).toString(),
+          role: "assistant",
+          content: "Something went wrong. Please try again.",
           sources: [],
           timestamp: new Date(),
         },
       ]);
-    } finally {
-      setLoading(false);
     }
+    setLoading(false);
   };
 
   return (
     <>
-      {/* Floating Chat Button */}
+      {/* ── FAB ─────────────────────────────────────────────── */}
       <button
-        onClick={() => setIsOpen(!isOpen)}
-        className="fixed bottom-6 right-6 w-14 h-14 bg-gradient-to-r from-purple-500 to-blue-500
-                   rounded-full shadow-lg flex items-center justify-center text-white text-2xl
-                   hover:scale-110 transition-transform z-50"
-        title="Ask AI about your messages"
+        onClick={() => setIsOpen((o) => !o)}
+        className={`
+          fixed bottom-6 right-6 w-13 h-13 rounded-2xl z-50
+          flex items-center justify-center text-white text-xl font-bold
+          shadow-2xl transition-all duration-200 hover:scale-110 active:scale-95
+          ${
+            isOpen
+              ? "bg-slate-700 dark:bg-slate-800"
+              : "bg-gradient-to-br from-violet-600 to-indigo-600 animate-pulse-ring"
+          }
+        `}
+        style={{ width: 52, height: 52 }}
+        title="AI Message Assistant"
       >
-        {isOpen ? "✕" : "🤖"}
+        {isOpen ? "✕" : "✦"}
       </button>
 
-      {/* Chat Panel */}
+      {/* ── Chat Panel ──────────────────────────────────────── */}
       {isOpen && (
         <div
-          className="fixed bottom-24 right-6 w-96 h-[500px] bg-white dark:bg-gray-800
-                      rounded-2xl shadow-2xl border border-gray-200 dark:border-gray-700
-                      flex flex-col z-50 animate-slide-up"
+          className="
+            fixed bottom-24 right-6 w-[400px] h-[560px] z-50
+            flex flex-col rounded-2xl overflow-hidden
+            shadow-2xl shadow-black/20 dark:shadow-black/60
+            border border-slate-200 dark:border-slate-700
+            bg-white dark:bg-[#111827]
+            animate-slide-up
+          "
         >
           {/* Header */}
-          <div className="p-4 bg-gradient-to-r from-purple-500 to-blue-500 rounded-t-2xl">
-            <h3 className="text-white font-bold text-lg">
-              🤖 Message Assistant
-            </h3>
-            <p className="text-white/80 text-xs">
+          <div className="shrink-0 px-5 py-4 bg-gradient-to-r from-violet-600 to-indigo-600">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-3">
+                <div className="w-9 h-9 rounded-xl bg-white/20 backdrop-blur flex items-center justify-center text-lg shrink-0">
+                  ✦
+                </div>
+                <div>
+                  <h3 className="text-white font-bold text-sm tracking-tight">
+                    Message Assistant
+                  </h3>
+                  <p className="text-violet-200 text-xs">
+                    {isIndexed
+                      ? `⚡ Searching ${messageCount} messages`
+                      : "⏳ Load messages to activate"}
+                  </p>
+                </div>
+              </div>
+              <button
+                onClick={() => setIsOpen(false)}
+                className="w-7 h-7 rounded-lg bg-white/10 hover:bg-white/20 flex items-center justify-center text-white/80 text-xs transition-colors"
+              >
+                ✕
+              </button>
+            </div>
+
+            {/* Status bar */}
+            <div
+              className={`mt-3 px-3 py-1.5 rounded-lg text-xs font-medium flex items-center gap-2
+              ${
+                isIndexed
+                  ? "bg-emerald-500/20 text-emerald-200 border border-emerald-400/20"
+                  : "bg-white/10 text-violet-200 border border-white/10"
+              }`}
+            >
+              <span
+                className={`w-1.5 h-1.5 rounded-full shrink-0 ${isIndexed ? "bg-emerald-400 animate-pulse" : "bg-violet-300"}`}
+              />
               {isIndexed
-                ? `✅ Searching across ${messageCount} messages`
-                : "⏳ Load messages to enable AI search"}
-            </p>
+                ? `AI active · ${messageCount} messages indexed`
+                : "Waiting for messages to be loaded"}
+            </div>
           </div>
 
           {/* Messages */}
-          <div className="flex-1 overflow-y-auto p-4 space-y-3">
+          <div className="flex-1 overflow-y-auto p-4 space-y-4 bg-slate-50 dark:bg-[#0f1629]">
             {messages.map((msg) => (
               <div
                 key={msg.id}
                 className={`flex ${msg.role === "user" ? "justify-end" : "justify-start"}`}
               >
+                {msg.role === "assistant" && (
+                  <div className="w-7 h-7 rounded-xl bg-gradient-to-br from-violet-600 to-indigo-600 flex items-center justify-center text-white text-xs shrink-0 mr-2 mt-0.5">
+                    ✦
+                  </div>
+                )}
+
                 <div
-                  className={`max-w-[85%] rounded-2xl px-4 py-2 text-sm ${
+                  className={`
+                  max-w-[82%] rounded-2xl px-4 py-3 text-sm shadow-sm
+                  ${
                     msg.role === "user"
-                      ? "bg-blue-500 text-white rounded-br-sm"
-                      : "bg-gray-100 dark:bg-gray-700 text-gray-800 dark:text-gray-200 rounded-bl-sm"
-                  }`}
+                      ? "bg-gradient-to-br from-violet-600 to-indigo-600 text-white rounded-br-sm"
+                      : "bg-white dark:bg-[#1e293b] text-slate-800 dark:text-slate-200 rounded-bl-sm border border-slate-100 dark:border-slate-700"
+                  }
+                `}
                 >
-                  <p className="whitespace-pre-wrap">{msg.content}</p>
+                  <p className="whitespace-pre-wrap leading-relaxed">
+                    {msg.content}
+                  </p>
 
                   {/* Sources */}
                   {msg.sources && msg.sources.length > 0 && (
-                    <div className="mt-2 pt-2 border-t border-gray-200 dark:border-gray-600">
-                      <p className="text-xs text-gray-500 dark:text-gray-400 mb-1">
-                        📎 Sources:
+                    <div className="mt-3 pt-3 border-t border-slate-100 dark:border-slate-600 space-y-1.5">
+                      <p className="text-[10px] font-semibold uppercase tracking-widest text-slate-400 dark:text-slate-500 mb-2">
+                        Sources
                       </p>
                       {msg.sources.map((src, i) => (
                         <div
                           key={i}
-                          className={`text-xs px-2 py-1 rounded-lg mb-1 ${
-                            platformColors[src.platform] ||
-                            "bg-gray-200 text-gray-700"
-                          }`}
+                          className={`flex items-center gap-2 px-2.5 py-1.5 rounded-xl text-xs
+                          ${PLATFORM_BADGE[src.platform] ?? "bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400 border border-slate-200 dark:border-slate-700"}`}
                         >
+                          <span>{PLATFORM_ICON[src.platform] ?? "📬"}</span>
                           <span className="font-semibold capitalize">
                             {src.platform}
                           </span>
-                          {" · "}
-                          {src.sender}
-                          {src.title && ` · "${src.title.substring(0, 30)}..."`}
-                          <span className="ml-1 opacity-60">
-                            ({(src.relevance_score * 100).toFixed(0)}% match)
+                          <span className="text-slate-400">·</span>
+                          <span className="truncate max-w-[100px]">
+                            {src.sender}
+                          </span>
+                          <span className="ml-auto font-bold shrink-0">
+                            {(src.relevance_score * 100).toFixed(0)}%
                           </span>
                         </div>
                       ))}
                     </div>
                   )}
+
+                  <p
+                    className={`text-[10px] mt-2 ${msg.role === "user" ? "text-violet-200" : "text-slate-400 dark:text-slate-600"}`}
+                  >
+                    {msg.timestamp.toLocaleTimeString([], {
+                      hour: "2-digit",
+                      minute: "2-digit",
+                    })}
+                  </p>
                 </div>
               </div>
             ))}
 
-            {/* Loading indicator */}
+            {/* Typing indicator */}
             {loading && (
-              <div className="flex justify-start">
-                <div className="bg-gray-100 dark:bg-gray-700 rounded-2xl rounded-bl-sm px-4 py-3">
-                  <div className="flex space-x-1">
-                    <div className="w-2 h-2 bg-gray-400 rounded-full animate-bounce" />
-                    <div className="w-2 h-2 bg-gray-400 rounded-full animate-bounce delay-100" />
-                    <div className="w-2 h-2 bg-gray-400 rounded-full animate-bounce delay-200" />
+              <div className="flex justify-start items-end gap-2">
+                <div className="w-7 h-7 rounded-xl bg-gradient-to-br from-violet-600 to-indigo-600 flex items-center justify-center text-white text-xs shrink-0">
+                  ✦
+                </div>
+                <div className="bg-white dark:bg-[#1e293b] rounded-2xl rounded-bl-sm px-4 py-3 border border-slate-100 dark:border-slate-700 shadow-sm">
+                  <div className="flex gap-1 items-center">
+                    {[0, 1, 2].map((i) => (
+                      <div
+                        key={i}
+                        className="w-2 h-2 bg-violet-400 rounded-full animate-bounce"
+                        style={{ animationDelay: `${i * 150}ms` }}
+                      />
+                    ))}
                   </div>
                 </div>
               </div>
             )}
-            <div ref={messagesEndRef} />
+            <div ref={endRef} />
           </div>
 
-          {/* Input */}
-          <div className="p-3 border-t border-gray-200 dark:border-gray-700">
+          {/* Input area */}
+          <div className="shrink-0 p-3 bg-white dark:bg-[#111827] border-t border-slate-100 dark:border-slate-800">
+            {/* Suggestions */}
+            <div className="flex flex-wrap gap-1.5 mb-2.5">
+              {SUGGESTIONS.map((s) => (
+                <button
+                  key={s}
+                  onClick={() => {
+                    setInput(s);
+                    inputRef.current?.focus();
+                  }}
+                  disabled={!isIndexed}
+                  className="
+                    text-[11px] px-2.5 py-1 rounded-lg font-medium transition-all duration-150
+                    bg-slate-100 dark:bg-slate-800
+                    text-slate-600 dark:text-slate-400
+                    border border-slate-200 dark:border-slate-700
+                    hover:bg-violet-50 hover:text-violet-700 hover:border-violet-200
+                    dark:hover:bg-violet-900/20 dark:hover:text-violet-300 dark:hover:border-violet-700
+                    disabled:opacity-30 disabled:cursor-not-allowed
+                  "
+                >
+                  {s}
+                </button>
+              ))}
+            </div>
+
+            {/* Input row */}
             <div className="flex gap-2">
               <input
+                ref={inputRef}
                 type="text"
                 value={input}
                 onChange={(e) => setInput(e.target.value)}
                 onKeyDown={(e) => e.key === "Enter" && handleQuery()}
+                disabled={!isIndexed || loading}
                 placeholder={
                   isIndexed
-                    ? "Ask about your messages..."
-                    : "Load messages first..."
+                    ? "Ask about your messages…"
+                    : "Load messages first…"
                 }
-                disabled={!isIndexed || loading}
-                className="flex-1 px-3 py-2 text-sm border border-gray-300 dark:border-gray-600
-                           rounded-xl bg-white dark:bg-gray-800 focus:outline-none
-                           focus:ring-2 focus:ring-purple-400 disabled:opacity-50"
+                className="input flex-1 py-2 text-sm"
               />
               <button
                 onClick={handleQuery}
                 disabled={!isIndexed || loading || !input.trim()}
-                className="px-3 py-2 bg-gradient-to-r from-purple-500 to-blue-500 text-white
-                           rounded-xl hover:opacity-90 disabled:opacity-50 transition-opacity text-sm"
+                className="
+                  px-4 py-2 rounded-xl text-sm font-semibold text-white
+                  bg-gradient-to-r from-violet-600 to-indigo-600
+                  hover:from-violet-500 hover:to-indigo-500
+                  disabled:opacity-40 disabled:cursor-not-allowed
+                  transition-all duration-150 active:scale-95 shadow-sm
+                "
               >
-                {loading ? "..." : "Ask"}
+                {loading ? (
+                  <span className="w-4 h-4 border-2 border-white/40 border-t-white rounded-full animate-spin block" />
+                ) : (
+                  "Send"
+                )}
               </button>
-            </div>
-
-            {/* Suggested questions */}
-            <div className="mt-2 flex flex-wrap gap-1">
-              {SUGGESTIONS.map((suggestion) => (
-                <button
-                  key={suggestion}
-                  onClick={() => setInput(suggestion)}
-                  disabled={!isIndexed}
-                  className="text-xs px-2 py-1 bg-gray-100 dark:bg-gray-700 text-gray-600
-                             dark:text-gray-400 rounded-full hover:bg-purple-100
-                             hover:text-purple-700 transition-colors disabled:opacity-40"
-                >
-                  {suggestion}
-                </button>
-              ))}
             </div>
           </div>
         </div>
