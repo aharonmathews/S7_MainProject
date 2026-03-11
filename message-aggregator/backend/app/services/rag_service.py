@@ -123,12 +123,29 @@ Answer:"""
         answer = None
         used_llm = False
 
-        for attempt in range(2):
-            try:
-                openrouter_api_key = os.getenv("OPENROUTER_API_KEY")
-                if not openrouter_api_key:
-                    raise Exception("Missing OPENROUTER_API_KEY")
+        # Top-tier free models that support system/user instruction formats
+        models = [
+            "nvidia/nemotron-3-super-120b-a12b:free",
+            "google/gemma-3-27b-it:free",
+            "mistralai/mistral-7b-instruct:free",
+            "qwen/qwen-2-7b-instruct:free",
+            "cognitivecomputations/dolphin-mixtral-8x7b:free"
+        ]
 
+        openrouter_api_key = os.getenv("OPENROUTER_API_KEY")
+        if not openrouter_api_key:
+            return {
+                "answer": "Missing OPENROUTER_API_KEY in .env configuration.",
+                "sources": [],
+                "query": query,
+                "used_llm": False
+            }
+
+        last_error = ""
+
+        for model in models:
+            try:
+                print(f"🤖 RAG: Trying model {model}...")
                 response = requests.post(
                     url="https://openrouter.ai/api/v1/chat/completions",
                     headers={
@@ -137,41 +154,40 @@ Answer:"""
                         "X-Title": "Message Aggregator",
                     },
                     json={
-                        "model": "google/gemini-2.0-flash-lite-preview-02-05:free",
+                        "model": model,
                         "messages": [
                             {"role": "user", "content": prompt}
                         ]
                     }
                 )
                 
-                if response.status_code == 429:
-                    if attempt == 0:
-                        print("⏳ Rate limited, waiting 6s before retry...")
-                        time.sleep(6)
-                        continue
-                    else:
-                        raise Exception("429 Too Many Requests")
+                if response.status_code != 200:
+                    error_msg = f"{response.status_code} Error: {response.text[:200]}"
+                    print(f"❌ RAG Error with {model}: {error_msg}")
+                    last_error = error_msg
+                    continue  # Try next model
 
-                response.raise_for_status()
                 result_json = response.json()
                 answer = result_json["choices"][0]["message"]["content"]
                 used_llm = True
+                print(f"✅ RAG: Success using {model}")
                 break
             except Exception as e:
-                error_str = str(e)
-                if '429' in error_str or 'Too Many Requests' in error_str:
-                    if attempt == 0:
-                        print("⏳ Rate limited, waiting 6s before retry...")
-                        time.sleep(6)
-                        continue
-                    else:
-                        answer = (
-                            "⚠️ AI quota reached. Showing raw search results:\n\n"
-                            + self._generate_fallback_answer(query, relevant_messages)
-                        )
-                else:
-                    answer = f"Could not generate answer: {error_str}"
-                break
+                print(f"❌ RAG Exception with {model}: {e}")
+                last_error = str(e)
+                import traceback
+                traceback.print_exc()
+                continue
+        
+        # If all models failed
+        if not used_llm:
+            answer = (
+                f"⚠️ AI quota reached for all {len(models)} free models.\n"
+                f"Last error: {last_error}\n\n"
+                f"---\n"
+                f"Showing raw search results:\n\n"
+                + self._generate_fallback_answer(query, relevant_messages)
+            )
 
         if answer is None:
             answer = self._generate_fallback_answer(query, relevant_messages)

@@ -204,7 +204,8 @@ async def get_messages(
     reddit_subreddit: str = Query("all", description="Reddit subreddit"),
     limit: int = Query(20, description="Number of messages per platform"),
     filter_by_preferences: bool = Query(False, description="Filter by user preferences"),
-    user_id: Optional[str] = Query(None, description="Firebase user ID")
+    user_id: Optional[str] = Query(None, description="Firebase user ID"),
+    force_refresh: bool = Query(False, description="Bypass cache and fetch fresh from APIs")
 ):
     """Fetch messages from selected platforms"""
     try:
@@ -229,7 +230,8 @@ async def get_messages(
             reddit_subreddit=reddit_subreddit,
             limit=limit,
             filter_by_preferences=filter_by_preferences,
-            user_id=user_id
+            user_id=user_id,
+            force_refresh=force_refresh
         )
         
         return result
@@ -293,13 +295,22 @@ async def gmail_auth(user_id: str = Query(...)):
 
 @app.get("/auth/gmail/callback")
 async def gmail_callback(
-    code: str = Query(...),
-    state: str = Query(...)
+    code: str = Query(None),
+    state: str = Query(None),
+    error: str = Query(None),
+    error_description: str = Query(None)
 ):
     """Handle Gmail OAuth callback"""
+    # ← Check if Google returned an error first (e.g., user denied access)
+    if error:
+        print(f"❌ Gmail OAuth error from Google: {error}")
+        print(f"   Description: {error_description}")
+        return RedirectResponse(url=f"http://localhost:3000/?gmail=error&reason={error}")
+
     try:
         user_id = state
         print(f"✅ Gmail OAuth callback received for user {user_id}")
+        print(f"   code: {code[:20] if code else None}...")
         
         flow = get_oauth_flow()
         flow.fetch_token(code=code)
@@ -323,7 +334,7 @@ async def gmail_callback(
         return RedirectResponse(url="http://localhost:3000/?gmail=success")
         
     except Exception as e:
-        print(f"❌ Error in Gmail OAuth callback: {e}")
+        print(f"❌ Error in Gmail OAuth callback: {type(e).__name__}: {e}")
         import traceback
         traceback.print_exc()
         return RedirectResponse(url="http://localhost:3000/?gmail=error")

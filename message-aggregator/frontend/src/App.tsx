@@ -170,10 +170,10 @@ const MainApp: React.FC = () => {
         // ← Send the combined messages list as regular/important based on what we actually send
         body: JSON.stringify({
           messages: {
-            important: importantMessages.filter((m) =>
+            important: importantMessages.filter((m: any) =>
               messagesToIndex.includes(m),
             ),
-            regular: regularMessages.filter((m) => messagesToIndex.includes(m)),
+            regular: regularMessages.filter((m: any) => messagesToIndex.includes(m)),
           },
         }),
       });
@@ -244,20 +244,49 @@ const MainApp: React.FC = () => {
     );
   };
 
-  const handleForceRefresh = async (platformId: string) => {
+  const [refreshing, setRefreshing] = useState(false);
+
+  const refreshMessages = async () => {
+    if (selectedPlatforms.length === 0) {
+      setError("Please select at least one platform");
+      return;
+    }
+    setRefreshing(true);
+    setError(null);
     try {
       const token = await getToken();
-      await fetch(`http://localhost:8000/api/cache/${platformId}`, {
-        method: "DELETE",
+      const response = await axios.get("http://localhost:8000/messages", {
+        params: {
+          platforms: selectedPlatforms.join(","),
+          twitter_keyword: twitterKeyword,
+          reddit_keyword: redditKeyword,
+          reddit_subreddit: redditSubreddit,
+          limit: 20,
+          filter_by_preferences: true,
+          user_id: user?.uid,
+          force_refresh: true,
+        },
         headers: { Authorization: `Bearer ${token}` },
       });
-      // Re-fetch just that platform
-      alert(
-        `Cache cleared for ${platformId}. Click Load Messages to fetch fresh data.`,
-      );
-    } catch (e) {
-      console.error("Failed to clear cache:", e);
+      setMessagesData(response.data);
+      if (response.data.cache_info) {
+        setCacheInfo(response.data.cache_info);
+      }
+      if (response.data.platforms_fetched_fresh) {
+        setPlatformsFetchedFresh(response.data.platforms_fetched_fresh);
+      }
+      // Re-index the AI chatbot with the fresh results
+      setRagIndexed(false);
+      await indexMessagesForRAG(response.data);
+    } catch (error: any) {
+      setError(error.message || "Failed to refresh messages");
     }
+    setRefreshing(false);
+  };
+
+  const handleForceRefresh = async (platformId: string) => {
+    // Legacy per-platform cache clear — now just triggers a full refresh
+    await refreshMessages();
   };
 
   const navLinks = [
@@ -400,40 +429,74 @@ const MainApp: React.FC = () => {
                 </button>
               )}
 
-              {/* Load Messages Button */}
-              <button
-                onClick={loadMessages}
-                disabled={loading || selectedPlatforms.length === 0}
-                className={`w-full btn-primary ${
-                  loading || selectedPlatforms.length === 0
-                    ? "opacity-50 cursor-not-allowed"
-                    : ""
-                }`}
-              >
-                {loading ? (
-                  <span className="flex items-center justify-center gap-2">
-                    <svg className="animate-spin h-4 w-4" viewBox="0 0 24 24">
-                      <circle
-                        className="opacity-25"
-                        cx="12"
-                        cy="12"
-                        r="10"
-                        stroke="currentColor"
-                        strokeWidth="4"
-                        fill="none"
-                      />
-                      <path
-                        className="opacity-75"
-                        fill="currentColor"
-                        d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"
-                      />
-                    </svg>
-                    Loading...
-                  </span>
-                ) : (
-                  "🚀 Load Messages"
-                )}
-              </button>
+              {/* Load Messages + Refresh Buttons */}
+              <div className="flex gap-2">
+                <button
+                  onClick={loadMessages}
+                  disabled={loading || refreshing || selectedPlatforms.length === 0}
+                  className={`flex-1 btn-primary ${
+                    loading || refreshing || selectedPlatforms.length === 0
+                      ? "opacity-50 cursor-not-allowed"
+                      : ""
+                  }`}
+                >
+                  {loading ? (
+                    <span className="flex items-center justify-center gap-2">
+                      <svg className="animate-spin h-4 w-4" viewBox="0 0 24 24">
+                        <circle
+                          className="opacity-25"
+                          cx="12"
+                          cy="12"
+                          r="10"
+                          stroke="currentColor"
+                          strokeWidth="4"
+                          fill="none"
+                        />
+                        <path
+                          className="opacity-75"
+                          fill="currentColor"
+                          d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"
+                        />
+                      </svg>
+                      Loading...
+                    </span>
+                  ) : (
+                    "🚀 Load Messages"
+                  )}
+                </button>
+
+                {/* Force Refresh button — bypasses cache, always fetches live */}
+                <button
+                  onClick={refreshMessages}
+                  disabled={loading || refreshing || selectedPlatforms.length === 0}
+                  title="Bypass cache and fetch latest messages right now"
+                  className={`px-3 py-2 rounded-lg border-2 border-amber-400 text-amber-600 dark:text-amber-400
+                    bg-amber-50 dark:bg-amber-900/20 hover:bg-amber-100 dark:hover:bg-amber-900/40
+                    transition-all font-medium text-sm ${
+                    loading || refreshing || selectedPlatforms.length === 0
+                      ? "opacity-40 cursor-not-allowed"
+                      : "hover:scale-105"
+                  }`}
+                >
+                  {refreshing ? (
+                    <span className="flex items-center gap-1">
+                      <svg className="animate-spin h-3 w-3" viewBox="0 0 24 24">
+                        <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none" />
+                        <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+                      </svg>
+                      ...
+                    </span>
+                  ) : (
+                    "⚡"
+                  )}
+                </button>
+              </div>
+              {/* Refresh hint */}
+              {messagesData.total_count > 0 && !refreshing && (
+                <p className="text-xs text-center text-gray-400 dark:text-gray-500 -mt-2">
+                  ⚡ = bypass cache, fetch live
+                </p>
+              )}
 
               {error && (
                 <p className="text-red-500 text-sm text-center">{error}</p>

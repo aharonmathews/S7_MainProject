@@ -11,6 +11,22 @@ from app.services.curation.hybrid_curator import HybridContentCurator
 from app.services.message_cache_service import message_cache_service
 import asyncio
 
+# Maps user preferences → best subreddits to fetch from
+PREFERENCE_SUBREDDIT_MAP: Dict[str, List[str]] = {
+    "Job Opportunities":    ["cscareerquestions", "jobs", "remotework", "forhire", "recruitinghell"],
+    "Technology":           ["technology", "programming", "MachineLearning", "artificial", "learnprogramming"],
+    "Healthcare":           ["medicine", "nursing", "medicalschool", "HealthInsurance", "GlobalHealthcare"],
+    "Physics":              ["Physics", "AskPhysics", "astrophysics", "quantum", "sciencefiction"],
+    "Study Materials":      ["learnprogramming", "GetStudying", "studentlife", "AskAcademia", "textbookreddit"],
+    "Finance":              ["personalfinance", "investing", "stocks", "CryptoCurrency", "financialindependence"],
+    "Science":              ["science", "biology", "chemistry", "askscience", "EverythingScience"],
+    "Sports":               ["sports", "nba", "soccer", "football", "mma"],
+    "Entertainment":        ["movies", "television", "gaming", "Music", "anime"],
+    "News":                 ["worldnews", "news", "geopolitics", "UpliftingNews", "TrueOffMyChest"],
+}
+DEFAULT_SUBREDDITS = ["all"]
+
+
 
 class MessageAggregator:
     def __init__(self):
@@ -25,23 +41,27 @@ class MessageAggregator:
         reddit_subreddit: str = "all",
         limit: int = 20,
         filter_by_preferences: bool = False,
-        user_id: Optional[str] = None
+        user_id: Optional[str] = None,
+        force_refresh: bool = False
     ) -> Dict[str, Any]:
 
         if selected_platforms is None:
             selected_platforms = ['telegram', 'twitter', 'gmail', 'reddit', 'slack', 'discord']
 
         print(f"\n🔄 Starting message aggregation for platforms: {selected_platforms}")
+        if force_refresh:
+            print("⚡ Force refresh requested — bypassing cache for all platforms")
         if filter_by_preferences and user_preferences:
             print(f"🎯 Filtering by preferences: {user_preferences}")
 
         # ── Step 1: Check which platforms have fresh cache ─────────────────
         cache_status = {}
-        if user_id:
+        if user_id and not force_refresh:
             cache_status = message_cache_service.get_cache_status(
                 user_id, selected_platforms
             )
         else:
+            # force_refresh=True → treat all platforms as stale
             cache_status = {p: False for p in selected_platforms}
 
         platforms_needing_fetch = [p for p in selected_platforms if not cache_status.get(p, False)]
@@ -81,10 +101,33 @@ class MessageAggregator:
                     task_platform_names.append('gmail')
 
                 elif platform == 'reddit':
-                    tasks.append(asyncio.to_thread(
-                        fetch_reddit_messages, reddit_keyword, reddit_subreddit, limit
-                    ))
-                    task_platform_names.append('reddit')
+                    # ── Use preference-based subreddits if preferences exist ──────
+                    if user_preferences:
+                        # Collect subreddits from all matching preferences (up to 2 total)
+                        chosen_subreddits: List[str] = []
+                        for pref in user_preferences:
+                            subs = PREFERENCE_SUBREDDIT_MAP.get(pref, [])
+                            for s in subs[:1]:  # 1 subreddit per preference max
+                                if s not in chosen_subreddits:
+                                    chosen_subreddits.append(s)
+                                if len(chosen_subreddits) >= 2:
+                                    break
+                            if len(chosen_subreddits) >= 2:
+                                break
+                        if not chosen_subreddits:
+                            chosen_subreddits = DEFAULT_SUBREDDITS
+                        print(f"🎯 Reddit: fetching from preference subreddits: {chosen_subreddits}")
+                        for sub in chosen_subreddits:
+                            tasks.append(asyncio.to_thread(
+                                fetch_reddit_messages, reddit_keyword, sub, limit // len(chosen_subreddits)
+                            ))
+                            task_platform_names.append('reddit')
+                    else:
+                        # Fallback: use the passed reddit_subreddit param
+                        tasks.append(asyncio.to_thread(
+                            fetch_reddit_messages, reddit_keyword, reddit_subreddit, limit
+                        ))
+                        task_platform_names.append('reddit')
 
                 elif platform == 'slack':
                     tasks.append(asyncio.to_thread(fetch_slack_messages, limit))
