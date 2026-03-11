@@ -1,15 +1,24 @@
-from fastapi import FastAPI, HTTPException, Query, Body
+from fastapi import FastAPI, HTTPException, Query, Body, Depends
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import RedirectResponse
+from fastapi.security import HTTPAuthorizationCredentials
 from typing import List, Optional
 from dotenv import load_dotenv
+import traceback
+import uvicorn
+
 from app.services.aggregator import MessageAggregator
 from app.services.firebase_service import FirebaseService
 from app.services.gmail import get_oauth_flow, GmailService, CLIENT_ID, CLIENT_SECRET
 from app.services.discord_service import get_discord_service
-from app.services.date_extractor import date_extractor  # ✅ Add this
+from app.services.date_extractor import date_extractor
+from app.services.rag_service import rag_service
+from app.middleware.auth import security, verify_firebase_token
+from app.services.message_cache_service import message_cache_service
+
 from google.oauth2.credentials import Credentials
 from app.routes import user, calendar, saved_messages
+
 import os
 import json
 
@@ -123,6 +132,69 @@ async def extract_dates(
         import traceback
         traceback.print_exc()
         raise HTTPException(status_code=500, detail=str(e))
+@app.post("/api/rag/index")
+async def index_messages_for_rag(
+    body: dict = Body(...),
+    credentials: HTTPAuthorizationCredentials = Depends(security)
+):
+    token_data = await verify_firebase_token(credentials)  # ← pass full credentials, add await
+    if not token_data:
+        raise HTTPException(status_code=401, detail="Invalid token")
+
+    uid = token_data['uid']
+    messages = body.get('messages', {})
+    all_messages = messages.get('important', []) + messages.get('regular', [])
+    rag_service.index_messages(uid, all_messages)
+
+    return {
+        "status": "indexed",
+        "message_count": len(all_messages),
+        "uid": uid
+    }
+
+
+@app.post("/api/rag/query")
+async def query_messages(
+    body: dict = Body(...),
+    credentials: HTTPAuthorizationCredentials = Depends(security)
+):
+    token_data = await verify_firebase_token(credentials)  # ← pass full credentials, add await
+    if not token_data:
+        raise HTTPException(status_code=401, detail="Invalid token")
+
+    uid = token_data['uid']
+    query = body.get('query', '').strip()
+
+    if not query:
+        raise HTTPException(status_code=400, detail="Query cannot be empty")
+
+    if not rag_service.has_index(uid):
+        return {
+            "answer": "Please load your messages first before asking questions.",
+            "sources": [],
+            "query": query
+        }
+
+    result = rag_service.answer_query(uid, query)
+    return result
+
+
+@app.get("/api/rag/status")
+async def rag_status(
+    credentials: HTTPAuthorizationCredentials = Depends(security)
+):
+    token_data = await verify_firebase_token(credentials)  # ← pass full credentials, add await
+    if not token_data:
+        raise HTTPException(status_code=401, detail="Invalid token")
+
+    uid = token_data['uid']
+    store = rag_service._stores.get(uid, {})
+
+    return {
+        "indexed": rag_service.has_index(uid),
+        "message_count": len(store.get('messages', []))
+    }
+
 
 @app.get("/messages")
 async def get_messages(
@@ -255,6 +327,53 @@ async def gmail_callback(
         import traceback
         traceback.print_exc()
         return RedirectResponse(url="http://localhost:3000/?gmail=error")
+
+@app.get("/api/cache/status")
+async def get_cache_status(
+    platforms: str = Query(...),
+    credentials: HTTPAuthorizationCredentials = Depends(security)
+):
+    """Get cache status for all platforms for this user"""
+    token_data = await verify_firebase_token(credentials)
+    if not token_data:
+        raise HTTPException(status_code=401, detail="Invalid token")
+
+    uid = token_data['uid']
+    platform_list = [p.strip() for p in platforms.split(',')]
+    info = message_cache_service.get_cache_info(uid, platform_list)
+    return {"cache_info": info}
+
+
+@app.delete("/api/cache/{platform}")
+async def invalidate_platform_cache(
+    platform: str,
+    credentials: HTTPAuthorizationCredentials = Depends(security)
+):
+    """Force refresh a platform's cache"""
+    token_data = await verify_firebase_token(credentials)
+    if not token_data:
+        raise HTTPException(status_code=401, detail="Invalid token")
+
+    uid = token_data['uid']
+    message_cache_service.invalidate_cache(uid, platform)
+    return {"message": f"Cache cleared for {platform}. Next load will fetch fresh data."}
+
+
+@app.delete("/api/cache")
+async def invalidate_all_cache(
+    platforms: str = Query(...),
+    credentials: HTTPAuthorizationCredentials = Depends(security)
+):
+    """Force refresh all platform caches"""
+    token_data = await verify_firebase_token(credentials)
+    if not token_data:
+        raise HTTPException(status_code=401, detail="Invalid token")
+
+    uid = token_data['uid']
+    platform_list = [p.strip() for p in platforms.split(',')]
+    for platform in platform_list:
+        message_cache_service.invalidate_cache(uid, platform)
+    return {"message": f"Cache cleared for: {', '.join(platform_list)}"}
 
 if __name__ == "__main__":
     import uvicorn

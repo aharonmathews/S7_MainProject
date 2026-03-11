@@ -5,7 +5,7 @@ from app.services.firebase_service import FirebaseService
 security = HTTPBearer()
 
 async def verify_firebase_token(credentials: HTTPAuthorizationCredentials):
-    token = credentials.credentials
+    token = credentials.credentials  # ← now correctly gets token from credentials object
     decoded_token = FirebaseService.verify_token(token)
     if not decoded_token:
         raise HTTPException(status_code=401, detail="Invalid authentication token")

@@ -6,17 +6,18 @@ import {
   useLocation,
   useNavigate,
 } from "react-router-dom";
+import axios from "axios";
 import { AuthProvider, useAuth } from "./contexts/AuthContext";
 import { ThemeProvider } from "./contexts/ThemeContext";
-import Login from "./components/Login";
-import Setup from "./components/Setup";
-import Dashboard from "./components/Dashboard";
-import ProtectedRoute from "./components/ProtectedRoute";
+import Login from "./components/login";
+import Setup from "./components/setup";
 import MessageList from "./components/MessageList";
-import Calendar from "./components/Calendar";
+import Calendar from "./components/calendar";
 import SavedMessages from "./components/SavedMessages";
+import Dashboard from "./components/dashboard";
+import ProtectedRoute from "./components/protectedroute";
 import ThemeToggle from "./components/ThemeToggle";
-import axios from "axios";
+import ChatAssistant from "./components/ChatAssistant";
 
 const MainApp: React.FC = () => {
   const [messagesData, setMessagesData] = useState<any>({
@@ -37,6 +38,12 @@ const MainApp: React.FC = () => {
   const { user, logout, getToken } = useAuth();
   const location = useLocation();
   const navigate = useNavigate();
+  const [ragIndexed, setRagIndexed] = useState(false);
+  const [ragMessageCount, setRagMessageCount] = useState(0);
+  const [cacheInfo, setCacheInfo] = useState<Record<string, any>>({});
+  const [platformsFetchedFresh, setPlatformsFetchedFresh] = useState<string[]>(
+    [],
+  );
 
   const platforms = [
     {
@@ -94,7 +101,7 @@ const MainApp: React.FC = () => {
       const token = await getToken();
       const response = await axios.get(
         `http://localhost:8000/auth/gmail/status?user_id=${user?.uid}`,
-        { headers: { Authorization: `Bearer ${token}` } }
+        { headers: { Authorization: `Bearer ${token}` } },
       );
       setGmailAuthenticated(response.data.authenticated);
     } catch (error) {
@@ -111,11 +118,79 @@ const MainApp: React.FC = () => {
       const token = await getToken();
       const response = await axios.get(
         `http://localhost:8000/auth/gmail?user_id=${user.uid}`,
-        { headers: { Authorization: `Bearer ${token}` } }
+        { headers: { Authorization: `Bearer ${token}` } },
       );
       window.location.href = response.data.auth_url;
     } catch (error) {
       console.error("Error initiating Gmail auth:", error);
+    }
+  };
+
+  const indexMessagesForRAG = async (data: any) => {
+    // ← Guard: don't re-index if already indexed
+    if (ragIndexed) {
+      console.log("⚡ RAG already indexed, skipping...");
+      return;
+    }
+
+    try {
+      const token = await getToken();
+
+      // ← Send top important messages first, then fill up with regular messages (max 20)
+      const maxMessagesToIndex = 20;
+      const importantMessages = data.important || [];
+      const regularMessages = data.regular || [];
+
+      let messagesToIndex = [...importantMessages];
+      if (messagesToIndex.length < maxMessagesToIndex) {
+        messagesToIndex = [
+          ...messagesToIndex,
+          ...regularMessages.slice(
+            0,
+            maxMessagesToIndex - messagesToIndex.length,
+          ),
+        ];
+      } else {
+        messagesToIndex = messagesToIndex.slice(0, maxMessagesToIndex);
+      }
+
+      if (messagesToIndex.length === 0) {
+        console.log("⚠️ No messages to index for RAG");
+        return;
+      }
+
+      console.log(`🤖 Indexing ${messagesToIndex.length} messages for RAG...`);
+
+      const response = await fetch("http://localhost:8000/api/rag/index", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+        // ← Send the combined messages list as regular/important based on what we actually send
+        body: JSON.stringify({
+          messages: {
+            important: importantMessages.filter((m) =>
+              messagesToIndex.includes(m),
+            ),
+            regular: regularMessages.filter((m) => messagesToIndex.includes(m)),
+          },
+        }),
+      });
+
+      if (!response.ok) {
+        const err = await response.json();
+        console.error("❌ RAG index failed:", err);
+        return;
+      }
+
+      const result = await response.json();
+      console.log(`✅ RAG indexed: ${result.message_count} messages`);
+
+      setRagIndexed(true);
+      setRagMessageCount(messagesToIndex.length);
+    } catch (e) {
+      console.error("RAG indexing failed:", e);
     }
   };
 
@@ -141,7 +216,20 @@ const MainApp: React.FC = () => {
         },
         headers: { Authorization: `Bearer ${token}` },
       });
+
       setMessagesData(response.data);
+
+      // ← Store cache info from response
+      if (response.data.cache_info) {
+        setCacheInfo(response.data.cache_info);
+      }
+      if (response.data.platforms_fetched_fresh) {
+        setPlatformsFetchedFresh(response.data.platforms_fetched_fresh);
+      }
+
+      if (!ragIndexed) {
+        await indexMessagesForRAG(response.data);
+      }
     } catch (error: any) {
       setError(error.message || "Failed to fetch messages");
     }
@@ -152,8 +240,24 @@ const MainApp: React.FC = () => {
     setSelectedPlatforms((prev) =>
       prev.includes(platform)
         ? prev.filter((p) => p !== platform)
-        : [...prev, platform]
+        : [...prev, platform],
     );
+  };
+
+  const handleForceRefresh = async (platformId: string) => {
+    try {
+      const token = await getToken();
+      await fetch(`http://localhost:8000/api/cache/${platformId}`, {
+        method: "DELETE",
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      // Re-fetch just that platform
+      alert(
+        `Cache cleared for ${platformId}. Click Load Messages to fetch fresh data.`,
+      );
+    } catch (e) {
+      console.error("Failed to clear cache:", e);
+    }
   };
 
   const navLinks = [
@@ -175,7 +279,7 @@ const MainApp: React.FC = () => {
         <div className="p-6 border-b border-gray-200 dark:border-dark-border">
           <div className="flex items-center justify-between">
             {sidebarOpen && (
-              <h1 className="text-2xl font-bold bg-gradient-to-r from-primary-500 to-blue-600 bg-clip-text text-transparent animate-fade-in">
+              <h1 className="text-xl font-bold bg-gradient-to-r from-primary-500 to-blue-600 bg-clip-text text-transparent">
                 MessageHub
               </h1>
             )}
@@ -183,169 +287,132 @@ const MainApp: React.FC = () => {
               onClick={() => setSidebarOpen(!sidebarOpen)}
               className="p-2 rounded-lg hover:bg-gray-100 dark:hover:bg-dark-bg transition-colors"
             >
-              <svg
-                className="w-6 h-6"
-                fill="none"
-                viewBox="0 0 24 24"
-                stroke="currentColor"
-              >
-                <path
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  strokeWidth={2}
-                  d={
-                    sidebarOpen
-                      ? "M11 19l-7-7 7-7m8 14l-7-7 7-7"
-                      : "M13 5l7 7-7 7M5 5l7 7-7 7"
-                  }
-                />
-              </svg>
+              {sidebarOpen ? "«" : "»"}
             </button>
           </div>
         </div>
 
         <div className="flex-1 overflow-y-auto p-4">
           {sidebarOpen && (
-            <>
+            <div className="space-y-6">
               {/* User Info */}
-              <div className="mb-6 p-4 card animate-slide-up">
-                <div className="flex items-center justify-between mb-3">
-                  <span className="text-sm text-gray-500 dark:text-gray-400">
-                    Logged in as
-                  </span>
+              <div className="p-3 bg-gray-50 dark:bg-dark-bg rounded-lg">
+                <p className="text-xs text-gray-500 dark:text-gray-400">
+                  Logged in as
+                </p>
+                <p className="text-sm font-medium truncate">{user?.email}</p>
+                <div className="flex items-center justify-between mt-2">
                   <ThemeToggle />
+                  <button
+                    onClick={logout}
+                    className="px-3 py-1 bg-red-500 text-white text-xs rounded-lg hover:bg-red-600"
+                  >
+                    Logout
+                  </button>
                 </div>
-                <p className="font-semibold truncate mb-3">{user?.email}</p>
-                <button
-                  onClick={() => logout()}
-                  className="w-full py-2 px-4 bg-red-500 hover:bg-red-600 text-white rounded-lg transition-colors duration-200 font-medium"
-                >
-                  Logout
-                </button>
               </div>
 
               {/* Navigation */}
-              <nav className="space-y-2 mb-6">
+              <nav className="space-y-1">
                 {navLinks.map((link) => (
                   <button
                     key={link.path}
                     onClick={() => navigate(link.path)}
-                    className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg transition-all duration-200 ${
+                    className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg text-left transition-colors ${
                       location.pathname === link.path
-                        ? "bg-primary-50 dark:bg-primary-900/20 text-primary-600 dark:text-primary-400 font-semibold"
-                        : "hover:bg-gray-100 dark:hover:bg-dark-bg"
+                        ? "bg-primary-50 dark:bg-primary-900/20 text-primary-600 dark:text-primary-400 font-medium"
+                        : "hover:bg-gray-100 dark:hover:bg-dark-bg text-gray-700 dark:text-gray-300"
                     }`}
                   >
-                    <span className="text-2xl">{link.icon}</span>
+                    <span>{link.icon}</span>
                     <span>{link.name}</span>
                   </button>
                 ))}
               </nav>
 
-              {/* Platform Selection */}
-              <div className="mb-6">
-                <h3 className="font-bold mb-3 text-lg">Select Platforms</h3>
+              {/* Platform Selector */}
+              <div>
+                <h3 className="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider mb-3">
+                  Select Platforms
+                </h3>
                 <div className="space-y-2">
                   {platforms.map((platform) => (
-                    <label
-                      key={platform.id}
-                      className={`flex items-center gap-3 p-3 rounded-lg cursor-pointer transition-all duration-200 ${
-                        selectedPlatforms.includes(platform.id)
-                          ? "bg-primary-50 dark:bg-primary-900/20 ring-2 ring-primary-500"
-                          : "hover:bg-gray-100 dark:hover:bg-dark-bg"
-                      } ${
-                        platform.id === "gmail" && !gmailAuthenticated
-                          ? "opacity-50"
-                          : ""
-                      }`}
-                    >
-                      <input
-                        type="checkbox"
-                        checked={selectedPlatforms.includes(platform.id)}
-                        onChange={() => handlePlatformToggle(platform.id)}
-                        disabled={
-                          platform.id === "gmail" && !gmailAuthenticated
-                        }
-                        className="w-5 h-5 text-primary-600 rounded focus:ring-primary-500"
-                      />
-                      <span className="text-xl">{platform.icon}</span>
-                      <span className="font-medium">{platform.name}</span>
-                      {platform.id === "gmail" && gmailAuthenticated && (
-                        <span className="ml-auto text-green-500 text-sm">
-                          ✓ Connected
+                    <div key={platform.id} className="relative">
+                      <button
+                        onClick={() => handlePlatformToggle(platform.id)}
+                        className={`w-full flex items-center gap-3 px-3 py-2 rounded-lg border transition-all ${
+                          selectedPlatforms.includes(platform.id)
+                            ? `bg-gradient-to-r ${platform.color} text-white border-transparent`
+                            : "border-gray-200 dark:border-dark-border hover:border-gray-300"
+                        }`}
+                      >
+                        <span>{platform.icon}</span>
+                        <span className="text-sm font-medium flex-1 text-left">
+                          {platform.name}
                         </span>
+                        {selectedPlatforms.includes(platform.id) && (
+                          <span>✓</span>
+                        )}
+                      </button>
+                      // Cache status badge
+                      {cacheInfo[platform.id] && (
+                        <div className="mt-1 flex items-center justify-between px-1">
+                          {cacheInfo[platform.id].is_fresh ? (
+                            <span className="text-xs text-green-600 dark:text-green-400 flex items-center gap-1">
+                              ⚡ Cached ({cacheInfo[platform.id].expires_in}m
+                              left)
+                            </span>
+                          ) : (
+                            <span className="text-xs text-gray-400">
+                              {cacheInfo[platform.id].minutes_old}m old
+                            </span>
+                          )}
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              handleForceRefresh(platform.id);
+                            }}
+                            className="text-xs text-blue-500 hover:text-blue-700 underline"
+                            title="Force refresh"
+                          >
+                            refresh
+                          </button>
+                        </div>
                       )}
-                    </label>
+                    </div>
                   ))}
                 </div>
-                {!gmailAuthenticated && (
-                  <button
-                    onClick={handleGmailAuth}
-                    className="w-full mt-3 py-2 px-4 bg-blue-500 hover:bg-blue-600 text-white rounded-lg transition-colors duration-200 text-sm font-medium"
-                  >
-                    Connect Gmail
-                  </button>
-                )}
               </div>
 
-              {/* Keywords */}
-              {selectedPlatforms.includes("twitter") && (
-                <div className="mb-4">
-                  <label className="block text-sm font-medium mb-2">
-                    Twitter Keyword
-                  </label>
-                  <input
-                    type="text"
-                    value={twitterKeyword}
-                    onChange={(e) => setTwitterKeyword(e.target.value)}
-                    className="input text-sm"
-                    placeholder="e.g., technology"
-                  />
-                </div>
+              {/* Gmail Connect */}
+              {selectedPlatforms.includes("gmail") && (
+                <button
+                  onClick={handleGmailAuth}
+                  className={`w-full px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
+                    gmailAuthenticated
+                      ? "bg-green-100 text-green-700 dark:bg-green-900/20"
+                      : "bg-red-100 text-red-700 dark:bg-red-900/20 hover:bg-red-200"
+                  }`}
+                >
+                  {gmailAuthenticated
+                    ? "✅ Gmail Connected"
+                    : "📧 Connect Gmail"}
+                </button>
               )}
 
-              {selectedPlatforms.includes("reddit") && (
-                <div className="space-y-3 mb-4">
-                  <div>
-                    <label className="block text-sm font-medium mb-2">
-                      Reddit Keyword
-                    </label>
-                    <input
-                      type="text"
-                      value={redditKeyword}
-                      onChange={(e) => setRedditKeyword(e.target.value)}
-                      className="input text-sm"
-                      placeholder="e.g., python"
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-sm font-medium mb-2">
-                      Subreddit
-                    </label>
-                    <input
-                      type="text"
-                      value={redditSubreddit}
-                      onChange={(e) => setRedditSubreddit(e.target.value)}
-                      className="input text-sm"
-                      placeholder="e.g., all"
-                    />
-                  </div>
-                </div>
-              )}
-
-              {/* Load Button */}
+              {/* Load Messages Button */}
               <button
                 onClick={loadMessages}
                 disabled={loading || selectedPlatforms.length === 0}
-                className={`w-full py-3 px-4 rounded-lg font-bold transition-all duration-200 ${
+                className={`w-full btn-primary ${
                   loading || selectedPlatforms.length === 0
-                    ? "bg-gray-300 dark:bg-gray-700 cursor-not-allowed"
-                    : "btn-primary"
+                    ? "opacity-50 cursor-not-allowed"
+                    : ""
                 }`}
               >
                 {loading ? (
                   <span className="flex items-center justify-center gap-2">
-                    <svg className="animate-spin h-5 w-5" viewBox="0 0 24 24">
+                    <svg className="animate-spin h-4 w-4" viewBox="0 0 24 24">
                       <circle
                         className="opacity-25"
                         cx="12"
@@ -358,7 +425,7 @@ const MainApp: React.FC = () => {
                       <path
                         className="opacity-75"
                         fill="currentColor"
-                        d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
+                        d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"
                       />
                     </svg>
                     Loading...
@@ -369,11 +436,18 @@ const MainApp: React.FC = () => {
               </button>
 
               {error && (
-                <div className="mt-3 p-3 bg-red-100 dark:bg-red-900/20 text-red-700 dark:text-red-400 rounded-lg text-sm">
-                  {error}
+                <p className="text-red-500 text-sm text-center">{error}</p>
+              )}
+
+              {/* RAG Status indicator */}
+              {ragIndexed && (
+                <div className="p-2 bg-purple-50 dark:bg-purple-900/20 rounded-lg text-center">
+                  <p className="text-xs text-purple-600 dark:text-purple-400">
+                    🤖 AI Assistant ready ({ragMessageCount} msgs indexed)
+                  </p>
                 </div>
               )}
-            </>
+            </div>
           )}
         </div>
       </aside>
@@ -387,6 +461,9 @@ const MainApp: React.FC = () => {
           <Route path="/dashboard" element={<Dashboard />} />
         </Routes>
       </main>
+
+      {/* ← ChatAssistant floating button - always visible */}
+      <ChatAssistant isIndexed={ragIndexed} messageCount={ragMessageCount} />
     </div>
   );
 };
