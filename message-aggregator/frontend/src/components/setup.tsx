@@ -78,7 +78,7 @@ const Setup: React.FC = () => {
         "http://localhost:8000/api/user/profile",
         {
           headers: { Authorization: `Bearer ${token}` },
-        }
+        },
       );
 
       if (response.data) {
@@ -97,7 +97,7 @@ const Setup: React.FC = () => {
     setSelectedServices((prev) =>
       prev.includes(service)
         ? prev.filter((s) => s !== service)
-        : [...prev, service]
+        : [...prev, service],
     );
   };
 
@@ -124,7 +124,7 @@ const Setup: React.FC = () => {
       await axios.post(
         "http://localhost:8000/api/user/setup",
         { services: selectedServices, preferences, job },
-        { headers: { Authorization: `Bearer ${token}` } }
+        { headers: { Authorization: `Bearer ${token}` } },
       );
 
       navigate("/");

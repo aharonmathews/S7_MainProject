@@ -6,9 +6,9 @@ export const fetchMessages = async (
   platforms: string[],
   twitterKeyword: string = "python",
   token: string,
-  limit: number = 20
+  limit: number = 20,
 ) => {
-  const response = await axios.get(`${API_BASE_URL}/messages`, {
+  const response = await axios.get(`${API_BASE_URL}/messages/v3/advanced`, {
     params: {
       platforms: platforms.join(","),
       twitter_keyword: twitterKeyword,

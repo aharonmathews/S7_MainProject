@@ -61,12 +61,16 @@ class FirebaseService:
     
     @staticmethod
     def update_user_profile(uid: str, updates: dict):
+        """
+        Update user profile using merge=True.
+        This creates the document if it doesn't exist, or updates it if it does.
+        """
         if not db:
             print("⚠️  Firestore not initialized")
             return False
         try:
             user_ref = db.collection('users').document(uid)
-            # Use set with merge=True to create if doesn't exist, update if exists
+            # merge=True: Don't overwrite existing fields, just update these ones
             user_ref.set(updates, merge=True)
             print(f"✅ Profile updated for user {uid}")
             print(f"   Updated fields: {list(updates.keys())}")
@@ -85,7 +89,7 @@ class FirebaseService:
             return False
         try:
             creds_ref = db.collection('users').document(uid).collection('credentials').document(platform)
-            creds_ref.set(credentials_data)
+            creds_ref.set(credentials_data, merge=True)
             print(f"✅ Credentials saved for {platform} (user: {uid})")
             return True
         except Exception as e:
@@ -103,9 +107,7 @@ class FirebaseService:
             if doc.exists:
                 print(f"✅ Credentials found for {platform}")
                 return doc.to_dict()
-            else:
-                print(f"⚠️  No credentials found for {platform}")
-                return None
+            return None
         except Exception as e:
-            print(f"❌ Error getting credentials for {platform}: {e}")
+            print(f"❌ Error getting credentials: {e}")
             return None

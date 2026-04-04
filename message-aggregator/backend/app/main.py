@@ -1,8 +1,11 @@
-from fastapi import FastAPI, HTTPException, Query, Body, Depends
+from fastapi import FastAPI, HTTPException, Query, Body, Depends, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import RedirectResponse
 from fastapi.security import HTTPAuthorizationCredentials
 from typing import List, Optional
+from urllib.parse import quote
+from datetime import datetime, timedelta
+from typing import Dict, Any
 from dotenv import load_dotenv
 import traceback
 import uvicorn
@@ -18,6 +21,12 @@ from app.services.message_cache_service import message_cache_service
 
 from google.oauth2.credentials import Credentials
 from app.routes import user, calendar, saved_messages
+from app.services.curation.improved_curator import improved_curator
+from app.services.curation.advanced_curator import advanced_curator
+
+gmail_oauth_pending: Dict[str, Dict[str, Any]] = {}
+GMAIL_OAUTH_TTL_MINUTES = 10
+
 
 import os
 import json
@@ -152,6 +161,146 @@ async def index_messages_for_rag(
         "uid": uid
     }
 
+@app.get("/messages/v2/improved")
+async def get_messages_improved(
+    platforms: str = Query(..., description="Comma-separated list of platforms"),
+    twitter_keyword: str = Query("python", description="Twitter search keyword"),
+    reddit_keyword: str = Query("technology", description="Reddit search keyword"),
+    reddit_subreddit: str = Query("all", description="Reddit subreddit"),
+    limit: int = Query(20, description="Number of messages per platform"),
+    filter_by_preferences: bool = Query(False, description="Filter by user preferences"),
+    user_id: Optional[str] = Query(None, description="Firebase user ID"),
+    force_refresh: bool = Query(False, description="Bypass cache")
+):
+    """
+    IMPROVED VERSION: Uses BM25 + Cross-Encoder instead of TF-IDF
+    Compare with /messages endpoint to see improvement!
+    """
+    try:
+        selected_platforms = [p.strip() for p in platforms.split(',')]
+        
+        user_preferences = []
+        if filter_by_preferences and user_id:
+            profile = FirebaseService.get_user_profile(user_id)
+            if profile and 'preferences' in profile:
+                user_preferences = profile['preferences']
+        
+        # Aggregate messages (same as before)
+        result = await aggregator.aggregate_messages_async(
+            selected_platforms=selected_platforms,
+            user_preferences=user_preferences if filter_by_preferences else None,
+            twitter_keyword=twitter_keyword,
+            reddit_keyword=reddit_keyword,
+            reddit_subreddit=reddit_subreddit,
+            limit=limit,
+            filter_by_preferences=filter_by_preferences,
+            user_id=user_id,
+            force_refresh=force_refresh
+        )
+        
+        all_messages = result['important'] + result['regular']
+        
+        # Use IMPROVED curator instead of hybrid curator
+        if filter_by_preferences and user_preferences:
+            print("🚀 Using IMPROVED Hybrid Curator (BM25 + Cross-Encoder)...")
+            improved_result = improved_curator.curate_messages(
+                all_messages,
+                user_preferences
+            )
+        else:
+            improved_result = {
+                'important': [],
+                'regular': all_messages,
+                'curation_stats': {}
+            }
+        
+        return {
+            'important': improved_result['important'],
+            'regular': improved_result['regular'],
+            'total_count': len(all_messages),
+            'important_count': len(improved_result['important']),
+            'preferences_used': user_preferences or [],
+            'curation_method': 'improved_hybrid_3stage',
+            'curation_stats': improved_result.get('curation_stats', {}),
+        }
+        
+    except Exception as e:
+        print(f"❌ Error in /messages/v2/improved: {e}")
+        import traceback
+        traceback.print_exc()
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.get("/messages/v3/advanced")
+async def get_messages_advanced(
+    platforms: str = Query(...),
+    twitter_keyword: str = Query("python"),
+    reddit_keyword: str = Query("technology"),
+    reddit_subreddit: str = Query("all"),
+    limit: int = Query(20),
+    filter_by_preferences: bool = Query(False),
+    user_id: Optional[str] = Query(None),
+    force_refresh: bool = Query(False)
+):
+    """
+    🏆 BEST VERSION: Uses BGE Reranker + Sentiment + Engagement
+    
+    This endpoint is the recommended final year project submission.
+    Compare with /messages (TF-IDF) to show massive improvement!
+    """
+    try:
+        selected_platforms = [p.strip() for p in platforms.split(',')]
+        
+        user_preferences = []
+        if filter_by_preferences and user_id:
+            profile = FirebaseService.get_user_profile(user_id)
+            if profile and 'preferences' in profile:
+                user_preferences = profile['preferences']
+        
+        result = await aggregator.aggregate_messages_async(
+            selected_platforms=selected_platforms,
+            user_preferences=user_preferences if filter_by_preferences else None,
+            twitter_keyword=twitter_keyword,
+            reddit_keyword=reddit_keyword,
+            reddit_subreddit=reddit_subreddit,
+            limit=limit,
+            filter_by_preferences=filter_by_preferences,
+            user_id=user_id,
+            force_refresh=force_refresh
+        )
+        
+        all_messages = result['important'] + result['regular']
+        
+        if filter_by_preferences and user_preferences:
+            print("🏆 Using ADVANCED Curator (BGE + Sentiment + Engagement)...")
+            advanced_result = advanced_curator.curate_messages(
+                all_messages,
+                user_preferences,
+                threshold=0.30  # Higher threshold for quality
+            )
+        else:
+            advanced_result = {
+                'important': [],
+                'regular': all_messages,
+                'curation_stats': {}
+            }
+        
+        return {
+            'important': advanced_result['important'],
+            'regular': advanced_result['regular'],
+            'total_count': len(all_messages),
+            'important_count': len(advanced_result['important']),
+            'preferences_used': user_preferences or [],
+            'curation_method': 'advanced_hybrid_5stage',
+            'curation_stats': advanced_result.get('curation_stats', {}),
+        }
+        
+    except Exception as e:
+        print(f"❌ Error: {e}")
+        import traceback
+        traceback.print_exc()
+        raise HTTPException(status_code=500, detail=str(e))
+
 
 @app.post("/api/rag/query")
 async def query_messages(
@@ -266,78 +415,119 @@ async def get_preferences(user_id: str):
 
 # Gmail OAuth routes
 @app.get("/auth/gmail/status")
-async def gmail_status(user_id: Optional[str] = Query(None)):
-    """Check Gmail authentication status"""
-    if user_id and user_id in gmail_credentials_store:
-        return {"authenticated": True}
-    if user_id:
-        creds = FirebaseService.get_user_credentials(user_id, 'gmail')
+async def gmail_status(
+    credentials: HTTPAuthorizationCredentials = Depends(security)
+):
+    """Check if user has Gmail authenticated"""
+    try:
+        token_data = await verify_firebase_token(credentials)
+        uid = token_data['uid']
+        
+        creds = FirebaseService.get_user_credentials(uid, 'gmail')
+        
         if creds:
-            return {"authenticated": True}
-    return {"authenticated": False}
+            print(f"✅ Gmail authenticated for user {uid}")
+            return {"authenticated": True, "message": "Gmail is connected"}
+        else:
+            print(f"⚠️  Gmail not authenticated for user {uid}")
+            return {"authenticated": False, "message": "Please authenticate Gmail"}
+            
+    except Exception as e:
+        print(f"❌ Error checking Gmail status: {e}")
+        return {"authenticated": False, "message": str(e)}
 
 @app.get("/auth/gmail")
-async def gmail_auth(user_id: str = Query(...)):
-    """Initiate Gmail OAuth flow"""
+async def gmail_auth(
+credentials: HTTPAuthorizationCredentials = Depends(security)
+):
     try:
-        flow = get_oauth_flow()
-        authorization_url, state = flow.authorization_url(
-            access_type='offline',
-            include_granted_scopes='true',
-            prompt='consent',
-            state=user_id
+        token_data = await verify_firebase_token(credentials)
+        uid = token_data["uid"]
+        
+        print(f"🔐 Initiating Gmail OAuth for user {uid}")
+        
+        from app.services.gmail import Flow, SCOPES, REDIRECT_URI, CLIENT_ID, CLIENT_SECRET
+
+        flow = Flow.from_client_config(
+            {
+                "web": {
+                    "client_id": CLIENT_ID,
+                    "client_secret": CLIENT_SECRET,
+                    "auth_uri": "https://accounts.google.com/o/oauth2/auth",
+                    "token_uri": "https://oauth2.googleapis.com/token",
+                    "redirect_uris": [REDIRECT_URI],
+                }
+            },
+            scopes=SCOPES,
+            redirect_uri=REDIRECT_URI
         )
-        print(f"🔐 Gmail OAuth URL generated for user {user_id}")
+
+        authorization_url, oauth_state = flow.authorization_url(
+            access_type="offline",
+            include_granted_scopes="true",
+            prompt="consent"
+        )
+
+        gmail_oauth_pending[oauth_state] = {
+            "uid": uid,
+            "flow": flow,
+            "created_at": datetime.utcnow()
+        }
+
+        # cleanup expired states
+        cutoff = datetime.utcnow() - timedelta(minutes=GMAIL_OAUTH_TTL_MINUTES)
+        expired = [k for k, v in gmail_oauth_pending.items() if v["created_at"] < cutoff]
+        for k in expired:
+            gmail_oauth_pending.pop(k, None)
+
         return {"auth_url": authorization_url}
     except Exception as e:
-        print(f"❌ Error generating Gmail OAuth URL: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
 @app.get("/auth/gmail/callback")
 async def gmail_callback(
-    code: str = Query(None),
+    request: Request,
     state: str = Query(None),
     error: str = Query(None),
     error_description: str = Query(None)
 ):
-    """Handle Gmail OAuth callback"""
-    # ← Check if Google returned an error first (e.g., user denied access)
     if error:
-        print(f"❌ Gmail OAuth error from Google: {error}")
-        print(f"   Description: {error_description}")
-        return RedirectResponse(url=f"http://localhost:3000/?gmail=error&reason={error}")
+        reason = quote(f"{error}: {error_description or ''}")
+        return RedirectResponse(url=f"http://localhost:3000/?gmail=error&reason={reason}")
+    if not state:
+        return RedirectResponse(url="http://localhost:3000/?gmail=error&reason=missing_state")
+
+    pending = gmail_oauth_pending.pop(state, None)
+    if not pending:
+        return RedirectResponse(url="http://localhost:3000/?gmail=error&reason=invalid_or_expired_state")
 
     try:
-        user_id = state
-        print(f"✅ Gmail OAuth callback received for user {user_id}")
-        print(f"   code: {code[:20] if code else None}...")
-        
-        flow = get_oauth_flow()
-        flow.fetch_token(code=code)
-        
-        credentials = flow.credentials
-        
+        uid = pending["uid"]
+        flow = pending["flow"]
+
+        # IMPORTANT: same flow object preserves PKCE code_verifier
+        flow.fetch_token(authorization_response=str(request.url))
+        credentials_obj = flow.credentials
+
+        from app.services.gmail import SCOPES, CLIENT_ID, CLIENT_SECRET
+
         creds_dict = {
-            'token': credentials.token,
-            'refresh_token': credentials.refresh_token,
-            'token_uri': credentials.token_uri,
-            'client_id': CLIENT_ID,
-            'client_secret': CLIENT_SECRET,
-            'scopes': list(credentials.scopes) if credentials.scopes else []
+            "token": credentials_obj.token,
+            "refresh_token": credentials_obj.refresh_token,
+            "token_uri": credentials_obj.token_uri,
+            "client_id": CLIENT_ID,
+            "client_secret": CLIENT_SECRET,
+            "scopes": list(credentials_obj.scopes) if credentials_obj.scopes else SCOPES
         }
-        
-        gmail_credentials_store[user_id] = credentials
-        FirebaseService.save_user_credentials(user_id, 'gmail', creds_dict)
-        
-        print(f"✅ Gmail credentials saved for user {user_id}")
-        
+
+        success = FirebaseService.save_user_credentials(uid, "gmail", creds_dict)
+        if not success:
+            return RedirectResponse(url="http://localhost:3000/?gmail=error&reason=save_failed")
+
         return RedirectResponse(url="http://localhost:3000/?gmail=success")
-        
     except Exception as e:
-        print(f"❌ Error in Gmail OAuth callback: {type(e).__name__}: {e}")
-        import traceback
-        traceback.print_exc()
-        return RedirectResponse(url="http://localhost:3000/?gmail=error")
+        reason = quote(str(e)[:180])
+        return RedirectResponse(url=f"http://localhost:3000/?gmail=error&reason={reason}")
 
 @app.get("/api/cache/status")
 async def get_cache_status(

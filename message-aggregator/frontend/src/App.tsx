@@ -101,10 +101,9 @@ const MainApp: React.FC = () => {
       if (!user) return;
       try {
         const token = await getToken();
-        const res = await axios.get(
-          `http://localhost:8000/user/profile?user_id=${user.uid}`,
-          { headers: { Authorization: `Bearer ${token}` } },
-        );
+        const res = await axios.get(`http://localhost:8000/api/user/profile`, {
+          headers: { Authorization: `Bearer ${token}` },
+        });
         const services: string[] = res.data?.services ?? [];
         setConnectedServices(services);
         // Default: select all connected services
@@ -133,10 +132,9 @@ const MainApp: React.FC = () => {
   const checkGmailAuth = async () => {
     try {
       const token = await getToken();
-      const r = await axios.get(
-        `http://localhost:8000/auth/gmail/status?user_id=${user?.uid}`,
-        { headers: { Authorization: `Bearer ${token}` } },
-      );
+      const r = await axios.get(`http://localhost:8000/auth/gmail/status`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
       setGmailAuth(r.data.authenticated);
     } catch {}
   };
@@ -144,10 +142,9 @@ const MainApp: React.FC = () => {
   const handleGmailAuth = async () => {
     if (!user) return;
     const token = await getToken();
-    const r = await axios.get(
-      `http://localhost:8000/auth/gmail?user_id=${user.uid}`,
-      { headers: { Authorization: `Bearer ${token}` } },
-    );
+    const r = await axios.get(`http://localhost:8000/auth/gmail`, {
+      headers: { Authorization: `Bearer ${token}` },
+    });
     window.location.href = r.data.auth_url;
   };
 
@@ -194,7 +191,7 @@ const MainApp: React.FC = () => {
     setError(null);
     try {
       const token = await getToken();
-      const r = await axios.get("http://localhost:8000/messages", {
+      const r = await axios.get("http://localhost:8000/messages/v3/advanced", {
         params: {
           platforms: selectedPlatforms.join(","),
           twitter_keyword: twitterKeyword,
