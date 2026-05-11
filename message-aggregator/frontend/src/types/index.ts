@@ -16,6 +16,14 @@ export interface Message {
   num_comments?: number;
   user_interactions?: { clicks?: number; saves?: number };
   engagement_score?: number;
+  bm25_score?: number;
+  cross_encoder_score?: number;
+  sentiment_score?: number;
+  ai_scores?: {
+    semantic_score?: number;
+    keyword_score?: number;
+    overall_score?: number;
+  };
 }
 
 export interface Platform {

@@ -13,10 +13,13 @@ interface Props {
     curation_method?: string;
     curation_stats?: {
       avg_semantic_score?: number;
-      avg_tfidf_score?: number; // baseline
-      avg_bm25_score?: number; // improved/advanced
+      avg_bm25_score?: number;
       avg_cross_encoder_score?: number;
+      avg_engagement_score?: number;
+      avg_sentiment_score?: number;
       avg_hybrid_score?: number;
+      weights?: Record<string, number>;
+      stages?: string[];
       preferences_matched?: Record<string, number>;
     };
   } | null;

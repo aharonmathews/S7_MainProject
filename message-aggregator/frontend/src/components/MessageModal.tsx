@@ -2,22 +2,23 @@ import React, { useState, useEffect } from "react";
 import axios from "axios";
 import { useAuth } from "../contexts/AuthContext";
 import { savedMessagesApi } from "../services/savedMessagesApi";
+import { Message } from "../types";
 
-interface Message {
-  id: string;
-  platform: string;
-  title: string;
-  content: string;
-  sender: string;
-  timestamp: string;
-  chat?: string;
-  url?: string;
-  ai_scores?: {
-    semantic_score?: number;
-    keyword_score?: number;
-    overall_score?: number;
-  };
-}
+// interface Message {
+//   id: string;
+//   platform: string;
+//   title: string;
+//   content: string;
+//   sender: string;
+//   timestamp: string;
+//   chat?: string;
+//   url?: string;
+//   ai_scores?: {
+//     semantic_score?: number;
+//     keyword_score?: number;
+//     overall_score?: number;
+//   };
+// }
 
 interface ExtractedEvent {
   date: string | null;
@@ -537,6 +538,41 @@ const MessageModal: React.FC<MessageModalProps> = ({ message, onClose }) => {
           )}
         </div>
       </div>
+      {(message.hybrid_score != null ||
+        message.bm25_score != null ||
+        message.semantic_score != null ||
+        message.cross_encoder_score != null ||
+        message.engagement_score != null ||
+        message.sentiment_score != null) && (
+        <div className="mt-6 p-4 rounded-xl bg-white/60 dark:bg-slate-900/40 border border-slate-200 dark:border-slate-700">
+          <h3 className="text-sm font-bold text-slate-900 dark:text-white mb-3">
+            Advanced Score Breakdown
+          </h3>
+
+          <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 text-xs">
+            {[
+              ["BM25", message.bm25_score],
+              ["Semantic", message.semantic_score],
+              ["Cross-Enc", message.cross_encoder_score],
+              ["Engagement", message.engagement_score],
+              ["Sentiment", message.sentiment_score],
+              ["Hybrid", message.hybrid_score],
+            ].map(([label, val]) => (
+              <div
+                key={label as string}
+                className="rounded-lg bg-slate-50 dark:bg-slate-800 px-3 py-2"
+              >
+                <div className="text-slate-500 dark:text-slate-400">
+                  {label as string}
+                </div>
+                <div className="font-semibold text-slate-900 dark:text-white">
+                  {val == null ? "—" : `${(Number(val) * 100).toFixed(1)}%`}
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
     </div>
   );
 };
