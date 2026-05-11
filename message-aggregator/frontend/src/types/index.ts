@@ -14,6 +14,8 @@ export interface Message {
   keyword_bonus?: number;
   score?: number;
   num_comments?: number;
+  user_interactions?: { clicks?: number; saves?: number };
+  engagement_score?: number;
 }
 
 export interface Platform {

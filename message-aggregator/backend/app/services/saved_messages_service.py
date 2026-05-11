@@ -28,6 +28,12 @@ class SavedMessagesService:
             
             db.collection('users').document(user_id)\
                 .collection('saved_messages').document(saved_id).set(saved_message)
+            FirebaseService.record_message_interaction(
+                user_id,
+                message_data,
+                clicks_inc=0,
+                saves_inc=1
+            )
             
             print(f"✅ Message saved: {saved_id}")
             return saved_message

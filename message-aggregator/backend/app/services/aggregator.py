@@ -159,6 +159,14 @@ class MessageAggregator:
                         )
 
         print(f"📊 Total messages: {len(all_messages)}")
+                # ── Step 3.5: Attach user interactions (clicks/saves) ─────────────
+        if user_id and all_messages:
+            ids = [m.get("id") for m in all_messages if m.get("id")]
+            interaction_map = FirebaseService.get_message_interactions(user_id, ids)
+
+            for m in all_messages:
+                mid = m.get("id")
+                m["user_interactions"] = interaction_map.get(mid, {"clicks": 0, "saves": 0})
 
         # ── Step 4: Optional preference filter ─────────────────────────────
         if filter_by_preferences and user_preferences:

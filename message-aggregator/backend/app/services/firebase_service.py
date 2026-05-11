@@ -1,6 +1,7 @@
 import firebase_admin
 from firebase_admin import credentials, auth, firestore
 import os
+from typing import List, Dict, Any
 
 # Initialize Firebase Admin SDK
 try:
@@ -111,3 +112,95 @@ class FirebaseService:
         except Exception as e:
             print(f"❌ Error getting credentials: {e}")
             return None
+        
+    @staticmethod
+    def record_message_interaction(
+        uid: str,
+        message: Dict[str, Any],
+        clicks_inc: int = 0,
+        saves_inc: int = 0
+    ) -> bool:
+        if not db:
+            print("⚠️ Firestore not initialized")
+            return False
+
+        try:
+            message_id = message.get("id") or message.get("message_id")
+            if not message_id:
+                print("⚠️ Missing message_id for interaction")
+                return False
+
+            ref = (
+                db.collection("users")
+                  .document(uid)
+                  .collection("interactions")
+                  .document(message_id)
+            )
+
+            payload = {
+                "message_id": message_id,
+                "platform": message.get("platform"),
+                "title": message.get("title"),
+                "sender": message.get("sender"),
+                "timestamp": message.get("timestamp"),
+                "clicks": firestore.Increment(int(clicks_inc)),
+                "saves": firestore.Increment(int(saves_inc)),
+                "updated_at": firestore.SERVER_TIMESTAMP,
+            }
+
+            ref.set(payload, merge=True)
+            return True
+        except Exception as e:
+            print(f"❌ Error recording interaction: {e}")
+            return False
+
+    @staticmethod
+    def get_message_interactions(
+        uid: str,
+        message_ids: List[str]
+    ) -> Dict[str, Dict[str, int]]:
+        if not db or not message_ids:
+            return {}
+
+        try:
+            refs = [
+                db.collection("users").document(uid)
+                  .collection("interactions").document(mid)
+                for mid in message_ids
+                if mid
+            ]
+
+            result: Dict[str, Dict[str, int]] = {}
+            for doc in db.get_all(refs):
+                if not doc.exists:
+                    continue
+                data = doc.to_dict() or {}
+                mid = data.get("message_id") or doc.id
+                result[mid] = {
+                    "clicks": int(data.get("clicks", 0) or 0),
+                    "saves": int(data.get("saves", 0) or 0),
+                }
+            return result
+        except Exception as e:
+            print(f"❌ Error getting interactions: {e}")
+            return {}
+
+    @staticmethod
+    def list_interactions(uid: str, limit: int = 200) -> List[Dict[str, Any]]:
+        if not db:
+            return []
+
+        try:
+            docs = (
+                db.collection("users").document(uid)
+                  .collection("interactions")
+                  .limit(limit)
+                  .stream()
+            )
+            items = [d.to_dict() for d in docs if d.exists]
+            # Sort in Python to avoid needing Firestore composite indexes
+            items.sort(key=lambda x: (int(x.get("saves", 0) or 0), int(x.get("clicks", 0) or 0)), reverse=True)
+            return items
+        except Exception as e:
+            print(f"❌ Error listing interactions: {e}")
+            return []

@@ -47,6 +47,31 @@ const MessageModal: React.FC<MessageModalProps> = ({ message, onClose }) => {
     checkIfMessageSaved();
   }, [message]);
 
+  useEffect(() => {
+    const recordClick = async () => {
+      try {
+        const token = await getToken();
+        if (!token) return;
+
+        await axios.post(
+          "http://localhost:8000/api/interactions/click",
+          {
+            message_id: message.id,
+            platform: message.platform,
+            title: message.title,
+            sender: message.sender,
+            timestamp: message.timestamp,
+          },
+          { headers: { Authorization: `Bearer ${token}` } },
+        );
+      } catch {
+        // don't block UI on analytics
+      }
+    };
+
+    recordClick();
+  }, [message.id]);
+
   const extractDatesFromMessage = async () => {
     try {
       setLoadingDates(true);
@@ -91,7 +116,7 @@ const MessageModal: React.FC<MessageModalProps> = ({ message, onClose }) => {
       if (isSaved) {
         const savedMessages = await savedMessagesApi.getSavedMessages(token);
         const savedMsg = savedMessages.find(
-          (m: any) => m.message_id === message.id
+          (m: any) => m.message_id === message.id,
         );
         if (savedMsg) {
           await savedMessagesApi.deleteSavedMessage(token, savedMsg.id);
@@ -108,7 +133,7 @@ const MessageModal: React.FC<MessageModalProps> = ({ message, onClose }) => {
       alert(
         `Failed to save message: ${
           error.response?.data?.detail || error.message
-        }`
+        }`,
       );
     } finally {
       setSavingMessage(false);
@@ -153,7 +178,7 @@ const MessageModal: React.FC<MessageModalProps> = ({ message, onClose }) => {
     } catch (error: any) {
       console.error("Error adding to calendar:", error);
       alert(
-        `Failed to add event: ${error.response?.data?.detail || error.message}`
+        `Failed to add event: ${error.response?.data?.detail || error.message}`,
       );
     } finally {
       setSavingEvent(null);
@@ -191,21 +216,21 @@ const MessageModal: React.FC<MessageModalProps> = ({ message, onClose }) => {
             <div className="flex-1">
               <div
                 className={`inline-flex items-center gap-2 px-4 py-2 rounded-full bg-gradient-to-r ${getPlatformColor(
-                  message.platform
+                  message.platform,
                 )} text-white font-bold text-sm mb-3`}
               >
                 <span className="text-lg">
                   {message.platform === "telegram"
                     ? "📱"
                     : message.platform === "twitter"
-                    ? "🐦"
-                    : message.platform === "gmail"
-                    ? "📧"
-                    : message.platform === "reddit"
-                    ? "🔶"
-                    : message.platform === "slack"
-                    ? "💬"
-                    : "🎮"}
+                      ? "🐦"
+                      : message.platform === "gmail"
+                        ? "📧"
+                        : message.platform === "reddit"
+                          ? "🔶"
+                          : message.platform === "slack"
+                            ? "💬"
+                            : "🎮"}
                 </span>
                 <span className="capitalize">{message.platform}</span>
               </div>

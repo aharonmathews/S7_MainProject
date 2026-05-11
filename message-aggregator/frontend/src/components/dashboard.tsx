@@ -80,6 +80,23 @@ const Dashboard: React.FC<Props> = ({
   const [loadingPrefs, setLoadingPrefs] = useState(true);
   const [savingPrefs, setSavingPrefs] = useState(false);
   const { user, getToken } = useAuth();
+  const [interactionSummary, setInteractionSummary] = useState<any>(null);
+
+  const loadInteractions = async () => {
+    const token = await getToken();
+    if (!token) return;
+    const res = await axios.get(
+      "http://localhost:8000/api/interactions/summary",
+      {
+        headers: { Authorization: `Bearer ${token}` },
+      },
+    );
+    setInteractionSummary(res.data);
+  };
+
+  useEffect(() => {
+    if (user) loadInteractions();
+  }, [user]);
 
   // Load preferences on mount
   useEffect(() => {
@@ -421,6 +438,71 @@ const Dashboard: React.FC<Props> = ({
             </>
           )}
         </button>
+      </div>
+
+      {/* ─── Section: INTERACTIONS (Judge View) ───────────────────── */}
+      <div className="border-t border-slate-200 dark:border-slate-700" />
+
+      <div className="card p-5">
+        <div className="flex items-end justify-between mb-3">
+          <div>
+            <h2 className="text-xl font-bold text-slate-900 dark:text-white">
+              📈 Engagement (Clicks & Saves)
+            </h2>
+            <p className="text-xs text-slate-500 dark:text-slate-400">
+              This is used by the Advanced Curator engagement stage.
+            </p>
+          </div>
+          <button className="btn-primary" onClick={loadInteractions}>
+            Refresh
+          </button>
+        </div>
+
+        {!interactionSummary ? (
+          <p className="text-sm text-slate-500 dark:text-slate-400">
+            No interaction data loaded yet.
+          </p>
+        ) : (
+          <>
+            <div className="flex gap-4 mb-4 text-sm">
+              <div className="stat-pill">
+                Clicks: {interactionSummary.totals?.clicks ?? 0}
+              </div>
+              <div className="stat-pill">
+                Saves: {interactionSummary.totals?.saves ?? 0}
+              </div>
+              <div className="stat-pill">
+                Tracked: {interactionSummary.count ?? 0}
+              </div>
+            </div>
+
+            <div className="overflow-auto">
+              <table className="w-full text-sm">
+                <thead className="text-left text-slate-500 dark:text-slate-400">
+                  <tr>
+                    <th className="py-2">Platform</th>
+                    <th className="py-2">Title</th>
+                    <th className="py-2">Clicks</th>
+                    <th className="py-2">Saves</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {(interactionSummary.items ?? []).map((it: any) => (
+                    <tr
+                      key={it.message_id}
+                      className="border-t border-slate-200 dark:border-slate-700"
+                    >
+                      <td className="py-2">{it.platform}</td>
+                      <td className="py-2">{it.title || it.message_id}</td>
+                      <td className="py-2">{it.clicks ?? 0}</td>
+                      <td className="py-2">{it.saves ?? 0}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </>
+        )}
       </div>
     </div>
   );

@@ -24,6 +24,8 @@ from app.routes import user, calendar, saved_messages
 from app.services.curation.improved_curator import improved_curator
 from app.services.curation.advanced_curator import advanced_curator
 
+from pydantic import BaseModel
+
 gmail_oauth_pending: Dict[str, Dict[str, Any]] = {}
 GMAIL_OAUTH_TTL_MINUTES = 10
 
@@ -141,6 +143,7 @@ async def extract_dates(
         import traceback
         traceback.print_exc()
         raise HTTPException(status_code=500, detail=str(e))
+    
 @app.post("/api/rag/index")
 async def index_messages_for_rag(
     body: dict = Body(...),
@@ -326,6 +329,52 @@ async def query_messages(
 
     result = rag_service.answer_query(uid, query)
     return result
+
+class InteractionClick(BaseModel):
+    message_id: str
+    platform: str
+    title: str = ""
+    sender: str = ""
+    timestamp: str = ""
+
+@app.post("/api/interactions/click")
+async def record_click(
+    payload: InteractionClick,
+    credentials: HTTPAuthorizationCredentials = Depends(security)
+):
+    user_data = await verify_firebase_token(credentials)
+    uid = user_data["uid"]
+
+    FirebaseService.record_message_interaction(
+        uid,
+        {
+            "id": payload.message_id,
+            "platform": payload.platform,
+            "title": payload.title,
+            "sender": payload.sender,
+            "timestamp": payload.timestamp,
+        },
+        clicks_inc=1,
+        saves_inc=0
+    )
+    return {"ok": True}
+
+@app.get("/api/interactions/summary")
+async def interactions_summary(
+    credentials: HTTPAuthorizationCredentials = Depends(security)
+):
+    user_data = await verify_firebase_token(credentials)
+    uid = user_data["uid"]
+
+    items = FirebaseService.list_interactions(uid, limit=200)
+    total_clicks = sum(int(x.get("clicks", 0) or 0) for x in items)
+    total_saves = sum(int(x.get("saves", 0) or 0) for x in items)
+
+    return {
+        "totals": {"clicks": total_clicks, "saves": total_saves},
+        "items": items[:50],  # top 50
+        "count": len(items),
+    }
 
 
 @app.get("/api/rag/status")
