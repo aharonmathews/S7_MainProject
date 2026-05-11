@@ -204,25 +204,39 @@ class AdvancedHybridCurator:
             text_to_analyze = self._extract_text(msg)[:1000]
             
             try:
-                # Get sentiment (add truncation=True to pipeline call to be extremely safe)
-                result = self.sentiment_analyzer(text_to_analyze, truncation=True, max_length=512)[0]
-                label = result['label'].upper()
-                confidence = result['score']
+                # # Get sentiment (add truncation=True to pipeline call to be extremely safe)
+                # result = self.sentiment_analyzer(text_to_analyze, truncation=True, max_length=512)[0]
+                # label = result['label'].upper()
+                # confidence = result['score']
                 
-                # Score mapping:
-                # NEGATIVE = urgent/important (1.0 * confidence)
-                # NEUTRAL = normal (0.5)
-                # POSITIVE = less urgent (0.3 * confidence)
+                # # Score mapping:
+                # # NEGATIVE = urgent/important (1.0 * confidence)
+                # # NEUTRAL = normal (0.5)
+                # # POSITIVE = less urgent (0.3 * confidence)
                 
-                if label == "NEGATIVE":
-                    sentiment_score = 1.0 * confidence  # High priority
-                elif label == "NEUTRAL":
-                    sentiment_score = 0.5
-                else:  # POSITIVE
-                    sentiment_score = 0.3 * confidence
+                # if label == "NEGATIVE":
+                #     sentiment_score = 1.0 * confidence  # High priority
+                # elif label == "NEUTRAL":
+                #     sentiment_score = 0.5
+                # else:  # POSITIVE
+                #     sentiment_score = 0.3 * confidence
                 
-                scores.append(sentiment_score)
-                
+                # scores.append(sentiment_score)
+                # backend/app/services/curation/advanced_curator.py
+                result_all = self.sentiment_analyzer(
+                    text_to_analyze,
+                    truncation=True,
+                    max_length=512,
+                    top_k=None,  # return all label scores
+                )[0]  # list[dict] for NEGATIVE/NEUTRAL/POSITIVE
+
+                scores_by_label = {r["label"].upper(): float(r["score"]) for r in result_all}
+                p_neg = scores_by_label.get("NEGATIVE", 0.0)
+                p_pos = scores_by_label.get("POSITIVE", 0.0)
+
+                # Continuous scalar in [0,1], centered at neutral
+                sentiment_score = max(0.0, min(1.0, 0.5 + 0.5 * (p_neg - p_pos)))
+                scores.append(float(sentiment_score))
             except Exception as e:
                 print(f"⚠️  Sentiment analysis error: {e}")
                 scores.append(0.5)  # Default neutral

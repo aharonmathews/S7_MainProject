@@ -117,7 +117,7 @@ const MessageList: React.FC<Props> = ({ messages }) => {
                 },
                 {
                   label: "Keyword",
-                  val: stats.avg_bm25_score ?? stats.avg_tfidf_score,
+                  val: stats.avg_bm25_score,
                   color: "text-indigo-600 dark:text-indigo-400",
                 },
                 {
