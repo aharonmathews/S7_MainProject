@@ -511,14 +511,19 @@ async def gmail_callback(
 
         from app.services.gmail import SCOPES, CLIENT_ID, CLIENT_SECRET
 
+        # backend/app/main.py inside /auth/gmail/callback
+
         creds_dict = {
             "token": credentials_obj.token,
-            "refresh_token": credentials_obj.refresh_token,
             "token_uri": credentials_obj.token_uri,
             "client_id": CLIENT_ID,
             "client_secret": CLIENT_SECRET,
-            "scopes": list(credentials_obj.scopes) if credentials_obj.scopes else SCOPES
+            "scopes": list(credentials_obj.scopes) if credentials_obj.scopes else SCOPES,
         }
+
+        # Only set refresh_token if Google actually returned one
+        if credentials_obj.refresh_token:
+            creds_dict["refresh_token"] = credentials_obj.refresh_token
 
         success = FirebaseService.save_user_credentials(uid, "gmail", creds_dict)
         if not success:
